@@ -1,3 +1,7 @@
+ci:
+  # the lock file and the types are checked in a github runner
+  skip: [uv-lock, ty]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -16,13 +20,37 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.10
     hooks:
-      # the linter
       - id: ruff-check
         args: [--fix]
-      # the formatter
       - id: ruff-format
 
+  # Checks every file of [tool.ty.src] in pyproject.toml, not only the changed files.
+  # A local hook, because the ty-pre-commit hook runs `uv check`, which refuses the conflicting cpu and cuda extras.
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty
+        entry: uv run --locked ty check
+        language: system
+        types: [python]
+        # ty finds the files itself from [tool.ty.src]; listed files would bypass its include
+        pass_filenames: false
+
+  # https://docs.astral.sh/uv/guides/integration/pre-commit/
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.12.23
     hooks:
       - id: uv-lock
+
+  # Dockerfile linter: https://github.com/immanuwell/dockerfile-roast
+  - repo: https://github.com/immanuwell/dockerfile-roast
+    rev: 1.7.0
+    hooks:
+      - id: droast
+
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: '0.26'
+    hooks:
+      - id: validate-pyproject
+        # Optional extra validations from SchemaStore:
+        additional_dependencies: [ "validate-pyproject-schema-store[all]" ]

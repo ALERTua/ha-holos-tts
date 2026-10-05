@@ -1,0 +1,54 @@
+# Example override file: it replaces package versions of the image, for example
+# for a GPU that the CUDA build of the image does not support.
+#
+# How it works: the container passes this file to uv as an override file.
+# Each version here replaces the version of the image. The container installs
+# all packages into /data/venv once. Later starts install nothing.
+#
+# Usage:
+#   1. Copy this file into your data folder:
+#        cp user_requirements.txt.example ./data/user_requirements.txt
+#   2. Set the environment variables (the path is INSIDE the container):
+#        UV_OVERRIDE=/data/user_requirements.txt
+#        UV_EXTRA_INDEX_URL=<the index of the section, if it names one>
+#   3. Uncomment ONE of the sections below and restart the container.
+#
+# To remove a package of the image, give it a marker that is never true:
+#   some-package ; sys_platform == "never"
+#
+# The CUDA image has these GPU packages:
+#   onnxruntime-gpu 1.30.0: speech model, CUDA 13 and cuDNN 9 (nvidia-* packages
+#     without the -cu12 suffix, and nvidia-cudnn-cu13).
+#   ctranslate2 4.8.2: verbalizer, built with CUDA 12.8. It needs the CUDA 12
+#     cuBLAS: nvidia-cublas-cu12 12.9.2.10 and nvidia-cuda-runtime-cu12 12.9.79.
+#     The image points LD_LIBRARY_PATH at them.
+#
+# For GTX 10xx (Pascal, sm_61). Not tested on a Pascal GPU.
+# CUDA 13 does not support GPUs older than Turing, so the speech model needs the
+# CUDA 12 build of onnxruntime-gpu. It has the same name and version as the
+# CUDA 13 build on PyPI, but it comes from the CUDA 12 index of ONNX Runtime:
+#   UV_EXTRA_INDEX_URL=https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
+# cuDNN 9.11 and later do not support GPUs older than Turing.
+# nvidia-cudnn-cu12 and nvidia-cudnn-cu13 write the same files, so remove the cu13 one.
+# The verbalizer uses int8_float16 on the GPU, and Pascal cannot run it. Also set:
+#   VERBALIZER_DEVICE=cpu
+# onnxruntime-gpu[cuda,cudnn]==1.29.0
+# nvidia-cudnn-cu12==9.10.2.21
+# nvidia-cudnn-cu13 ; sys_platform == "never"
+# nvidia-cublas ; sys_platform == "never"
+# nvidia-cuda-runtime ; sys_platform == "never"
+# nvidia-cuda-nvrtc ; sys_platform == "never"
+# nvidia-cufft ; sys_platform == "never"
+# nvidia-curand ; sys_platform == "never"
+# nvidia-nvjitlink ; sys_platform == "never"
+#
+# For RTX 50xx (Blackwell, sm_120): the versions of the image support it, so no
+# override is necessary. Not tested on a Blackwell GPU. If you pin older
+# versions, keep at least these:
+# onnxruntime-gpu>=1.28.0
+# ctranslate2>=4.7.0
+# nvidia-cublas-cu12>=12.8.3.14
+#
+# Another version of the same CUDA 13 build, for example to go back after a
+# problem with a new release (tested on an RTX 4090):
+# onnxruntime-gpu==1.29.0

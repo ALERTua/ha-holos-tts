@@ -6,11 +6,17 @@ wheels/
 *.egg-info
 .venv
 .env
+hf_token.txt
 .idea
 .vscode/
 .pytest_cache/
 .ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
 data/
-.claude/
-!.claude/skills
-!.claude/memory
+# git cannot re-include a file under an ignored folder, so ignore the contents, not the folder
+.claude/*
+!.claude/skills/
+!.claude/memory/

@@ -19,7 +19,7 @@ from .constants import MODEL_PARTS
 from .text import group_sentences, prepare_sentences
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable
+    from collections.abc import AsyncGenerator, Callable
     from multiprocessing.connection import Connection
     from multiprocessing.process import BaseProcess
 
@@ -137,7 +137,7 @@ class Synthesizer:
 
         return {"worker": "running", **status}
 
-    async def synthesize(self, text: str, voice: str | None, speed: float) -> AsyncIterator[np.ndarray]:
+    async def synthesize(self, text: str, voice: str | None, speed: float) -> AsyncGenerator[np.ndarray, None]:
         """Yield the audio of ``text`` chunk by chunk, so that a caller can send the first chunk early."""
         chunks = group_sentences(prepare_sentences(text), self.chunk_chars)
         resolved = await self.resolve_voice(voice)

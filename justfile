@@ -11,8 +11,12 @@ image := "holos-tts"
 container := "holos-tts"
 # the folder next to this file keeps the downloaded models and the cache between containers
 data := justfile_directory() / "data"
+# the same variables as in .env; the file .env passes the other variables into the container
 http_port := env("HTTP_PORT", "8000")
 wyoming_port := env("WYOMING_PORT", "10200")
+default_voice := env("DEFAULT_VOICE", "Speaker_43")
+puid := env("PUID", "1000")
+pgid := env("PGID", "1000")
 url := "http://127.0.0.1:" + http_port
 
 # Install the CPU dependencies and the development tools into .venv
@@ -23,10 +27,11 @@ install:
 upgrade:
     uv sync --extra cpu --upgrade
 
-# Format the code and fix the lint findings that ruff can fix
+# Format the code, fix the lint findings that ruff can fix, and check the types with ty
 lint:
     uv run ruff format .
     uv run ruff check --fix
+    uvx --with pre-commit-uv pre-commit run ty --all-files
 
 # Run all pre-commit hooks on all files
 pre:
@@ -39,6 +44,10 @@ pre-update:
 # Run all tests
 test:
     uv run pytest
+
+# Run all tests with the coverage report. CI fails below 85 %
+cov:
+    uv run pytest --cov=holos_tts --cov-report=term-missing --cov-fail-under=85
 
 # Build the CPU image with wslc
 build:
@@ -60,7 +69,12 @@ _data:
 
 # The ports inside the container stay 8000 and 10200, as in docker-compose.yml
 _run tag gpus:
-    $envFile = if (Test-Path .env) { @('--env-file', '.env') } else { @() }; wslc run -d --name {{container}} {{gpus}} @envFile -e HTTP_PORT=8000 -e WYOMING_PORT=10200 -p {{http_port}}:8000 -p {{wyoming_port}}:10200 -v '{{data}}:/data' {{image}}:{{tag}}
+    $envFile = if (Test-Path .env) { @('--env-file', '.env') } else { @() }; \
+    wslc run -d --name {{container}} {{gpus}} @envFile -u {{puid}}:{{pgid}} \
+        -e HTTP_PORT=8000 -e WYOMING_PORT=10200 \
+        -p {{http_port}}:8000 -p {{wyoming_port}}:10200 \
+        -v '{{data}}:/data' \
+        {{image}}:{{tag}}
 
 # Stop and remove the container. The folder data with the models stays
 stop:
@@ -89,9 +103,18 @@ health:
 warmup:
     Invoke-RestMethod -Method Post {{url}}/v1/warmup | ConvertTo-Json
 
-# Speak TEXT into FILE through the OpenAI-compatible API, for example: just say "Привіт, о 15:30"
-say TEXT FILE="speech.mp3":
-    $body = [Text.Encoding]::UTF8.GetBytes((@{ input = '{{TEXT}}' } | ConvertTo-Json)); Invoke-WebRequest -Method Post {{url}}/v1/audio/speech -ContentType 'application/json' -Body $body -OutFile '{{FILE}}'; Get-Item '{{FILE}}' | Select-Object Name, Length
+# Speak TEXT with VOICE into the folder data. VOICE defaults to DEFAULT_VOICE. Example: just say "Привіт" "Гаська Шиян"
+say TEXT VOICE=default_voice FILE="speech.mp3":
+    $body = [Text.Encoding]::UTF8.GetBytes((@{ input = '{{TEXT}}'; voice = '{{VOICE}}' } | ConvertTo-Json)); \
+    Invoke-WebRequest -Method Post {{url}}/v1/audio/speech \
+        -ContentType 'application/json' -Body $body -OutFile '{{data}}/{{FILE}}'; \
+    Get-Item '{{data}}/{{FILE}}' | Select-Object FullName, Length
+
+# Show the voice names. The default voice is first
+voices:
+    [Console]::OutputEncoding = [Text.Encoding]::UTF8; \
+    $raw = (Invoke-WebRequest {{url}}/v1/audio/voices -UseBasicParsing).RawContentStream.ToArray(); \
+    ([Text.Encoding]::UTF8.GetString($raw) | ConvertFrom-Json).voices
 
 # Delete the cache in the folder data. The server makes it again from the downloaded models
 clean-cache:

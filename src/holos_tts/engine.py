@@ -74,7 +74,7 @@ def order_voices(names: list[str] | set[str], default: str) -> list[str]:
     return [default, *rest] if default in names else rest
 
 
-def _to_vector(value: object, source: str) -> np.ndarray:
+def _to_vector(value: Any, source: str) -> np.ndarray:
     array = np.asarray(value.numpy() if hasattr(value, "numpy") else value, dtype=np.float32).reshape(-1)
     if array.size != VOICE_SIZE:
         msg = f"{source}: a voice must have {VOICE_SIZE} numbers, it has {array.size}"
@@ -261,4 +261,4 @@ class HolosEngine:
                 "speed": np.array([speed], dtype=np.float32),
             },
         )
-        return audio.reshape(-1)[: int(np.asarray(lengths).reshape(-1)[0])].astype(np.float32)
+        return np.asarray(audio).reshape(-1)[: int(np.asarray(lengths).reshape(-1)[0])].astype(np.float32)

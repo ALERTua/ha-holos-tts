@@ -1,0 +1,18 @@
+---
+name: models
+description: Read this file before you change a model, a model revision, the verbalizer, the stress model or the text pipeline.
+metadata:
+  type: project
+---
+
+- The server runs the ONNX export of HolosTTS: `holos_cpu_int8.onnx` on the CPU and `holos.onnx` (float32) on CUDA. Do not switch to the torch code of the author. The ONNX graph has a `speed` input, and the torch code has none.
+- Each download has a pinned revision: `engine.MODEL_REVISION`, `verbalizer.MODEL_REVISION` and `verbalizer.TOKENIZER_REVISION`. The author changed the model architecture between revisions, and old code cannot load new weights. Before you move a pin, compare `engine.VOCAB` with the symbol table of the new checkpoint, and listen to the speech.
+- `engine.VOCAB` has the apostrophe three times. The tokenizer of the checkpoint keeps the last index of a repeated symbol, and `engine.TOKEN_IDS` does the same.
+- One pass of the model makes at most about 25 s of speech. For this reason, `text.split_long_sentence` splits a sentence longer than 150 characters at commas, then at spaces.
+- The verbalizer is the CTranslate2 build of M2M100. It needs only sentencepiece and `vocab.json`, not transformers. The output is the same, and transformers costs about 200 MB.
+- Only a sentence with digits, symbols, Latin letters or acronyms goes to the verbalizer (`text.needs_verbalization`). The verbalizer is slow, and it sometimes rewrites plain words, for example "Невеличкі" into "Невеликі".
+- The verbalizer keeps a numeric date such as 15.03.2026 as digits. `text.prenormalize` writes the month as a word first.
+- `text.recover_stress` puts the stress marks of the user back after the verbalizer. It cannot do this next to punctuation that the verbalizer changes.
+- The stress model is stanza through `ukrainian-word-stress`. A ByT5 CTranslate2 stressifier needs 2.7 s for each sentence and 1.36 GB more memory, against 0.07 s and 0.57 GB.
+- An unknown voice name gets the default voice and a warning, not HTTP 400. The openai_tts integration of Home Assistant sends the voice "alloy" in a probe.
+- Free-threaded Python gives no gain now. The wheels of onnxruntime, ctranslate2 and sentencepiece for it do not exist, and ctranslate2 turns the GIL on again at import.

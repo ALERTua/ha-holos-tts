@@ -1,8 +1,8 @@
 services:
-  holos-tts:
+  ha-holos-tts:
     # CPU image. For an NVIDIA GPU use the tag "latest-cuda" and uncomment the "deploy" block below.
-    image: ghcr.io/alertua/holos-tts:latest
-    container_name: holos-tts
+    image: ghcr.io/alertua/ha-holos-tts:latest
+    container_name: ha-holos-tts
     restart: unless-stopped
     user: "${PUID:-1000}:${PGID:-1000}"
     env_file:
@@ -12,6 +12,8 @@ services:
       # the servers in the container keep these ports; HTTP_PORT and WYOMING_PORT in .env choose the host ports
       HTTP_PORT: 8000
       WYOMING_PORT: 10200
+      # with the two "secrets" blocks below: read the Hugging Face token from a file instead of HF_TOKEN
+      # HF_TOKEN_PATH: /run/secrets/hf_token
     ports:
       # OpenAI-compatible API
       - "${HTTP_PORT:-8000}:8000"
@@ -20,6 +22,8 @@ services:
     volumes:
       # models, the stress dictionary and your own voices (./data/voices)
       - ./data:/data
+#    secrets:
+#      - hf_token
 
 #    deploy:
 #      resources:
@@ -28,3 +32,8 @@ services:
 #            - driver: nvidia
 #              count: 1
 #              capabilities: [gpu]
+
+# A file with only the Hugging Face token in it. The container user (PUID) must be able to read it.
+#secrets:
+#  hf_token:
+#    file: ./hf_token.txt

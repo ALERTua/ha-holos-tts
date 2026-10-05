@@ -33,7 +33,7 @@ _META_KEYS = ("lang", "idx", "cutoff", "lower")
 def install(cache_dir: Path) -> None:
     """Make ``Pretrain.load`` read and write the fast copy in ``cache_dir``. A second call changes only the folder."""
     original = getattr(Pretrain.load, "__wrapped__", Pretrain.load)
-    Pretrain.load = _wrap(original, cache_dir)
+    Pretrain.load = _wrap(original, cache_dir)  # ty: ignore[invalid-assignment] - Callable has no keyword self
 
 
 def _wrap(original: Callable[[Pretrain], None], cache_dir: Path) -> Callable[[Pretrain], None]:
@@ -115,6 +115,9 @@ def _write(pretrain: Pretrain, root: Path) -> None:
 
         if emb.ndim != 2 or emb.shape[0] != len(words):  # noqa: PLR2004
             LOG.debug("The pretrain matrix does not fit the word list, so the server does not save the fast copy")
+            return
+
+        if pretrain.filename is None:  # the loader calls this function only for an existing file
             return
 
         started = time.monotonic()

@@ -33,6 +33,21 @@ END_TOKEN = "</s>"  # noqa: S105
 UNKNOWN_TOKEN = "<unk>"  # noqa: S105
 SPECIAL_TOKENS = frozenset({"<s>", END_TOKEN, "<pad>", UNKNOWN_TOKEN})
 INT8_CACHE_FOLDER = "verbalizer-int8"
+# float16 needs a GPU of compute capability 7.0 or newer, so an older GPU takes the next type
+CUDA_COMPUTE_TYPES = ("int8_float16", "int8_float32", "float32")
+
+
+def _compute_type(device: str) -> str:
+    """Return int8 on the CPU, and the first type of ``CUDA_COMPUTE_TYPES`` that the GPU supports on CUDA."""
+    if device == "cpu":
+        return "int8"
+
+    supported = ctranslate2.get_supported_compute_types(device)
+    compute_type = next((name for name in CUDA_COMPUTE_TYPES if name in supported), CUDA_COMPUTE_TYPES[-1])
+    if compute_type != CUDA_COMPUTE_TYPES[0]:
+        LOG.info("The GPU does not support %s, the verbalizer uses %s", CUDA_COMPUTE_TYPES[0], compute_type)
+
+    return compute_type
 
 
 def _remove_other_copies(int8_dir: Path) -> None:
@@ -77,7 +92,7 @@ class Verbalizer:
         self._sp = sentencepiece.SentencePieceProcessor(model_file=sp_model)
         options = {
             "device": device,
-            "compute_type": "int8" if device == "cpu" else "int8_float16",
+            "compute_type": _compute_type(device),
             "intra_threads": threads,
         }
         self._translator = _load_translator(Path(model_dir), cache_dir, options)

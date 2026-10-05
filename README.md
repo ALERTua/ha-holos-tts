@@ -3,9 +3,9 @@
 [![Stand With Ukraine](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/badges/StandWithUkraine.svg)](https://stand-with-ukraine.pp.ua)
 [![Russian Warship Go Fuck Yourself](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/badges/RussianWarship.svg)](https://stand-with-ukraine.pp.ua)
 
-# holos-tts
+# ha-holos-tts
 
-A Ukrainian text-to-speech server for Home Assistant. It runs the [HolosTTS](https://huggingface.co/patriotyk/HolosTTS) model of patriotyk in one container.
+A Ukrainian text-to-speech server for Home Assistant. It runs the [HolosTTS](https://huggingface.co/patriotyk/HolosTTS) model of Serhiy Stetskovych ([patriotyk](https://github.com/patriotyk)) in one container. See "Credits" for all the work that this server uses.
 
 The server gives two interfaces:
 
@@ -44,6 +44,9 @@ The container keeps all its files in `/data`. The file docker-compose.yml mounts
 
 The downloaded models take about 2.5 GB in `huggingface` and `stanza` together. The cache takes about 880 MB in the CPU image. The total is about 3.4 GB.
 
+<details>
+<summary>What the cache holds</summary>
+
 The cache holds three parts:
 
 - The optimized graph of the speech model, about 306 MB. Only the CPU image makes it.
@@ -53,6 +56,8 @@ The cache holds three parts:
 You can delete the folder `/data/cache`. The server makes the copies again when it loads the models.
 
 On the first start, the first request after the download takes 10 to 12 s, because the server builds the cache. These numbers come from a 32-core CPU. Later starts read the cache.
+
+</details>
 
 ## Home Assistant
 
@@ -93,6 +98,8 @@ To load the models before a voice command, see `POST /v1/warmup` in the API sect
 
 The model has 27 voices: "Гаська Шиян" and the numbered voices "Speaker_0" to "Speaker_84". `GET /v1/audio/voices` gives the list. The default voice is `Speaker_43`.
 
+The model card does not tell whose voices these are, and it gives no license for the voices. For the voices of his older model, [styletts2-ukrainian](https://huggingface.co/spaces/patriotyk/styletts2-ukrainian/discussions/11), the author wrote that they are the voices of well-known voice actors and that they should not be used. For public content, such as a video or a podcast, use your own cloned voice (see below).
+
 You can add your own voices:
 
 1. Open the [HolosTTS demo](https://huggingface.co/spaces/patriotyk/HolosTTS).
@@ -117,6 +124,11 @@ Set a variable in the file `.env`. If you run the image without Docker Compose, 
 
 A switch takes `1` or `0`. It also takes `true` or `false`, `yes` or `no`, and `on` or `off`. An empty value of a switch means `0`.
 
+The file [.env.example](.env.example) explains each setting in plain words.
+
+<details>
+<summary>All settings in one table</summary>
+
 | Variable | Default | What it does | When to change it |
 |---|---|---|---|
 | *Ports* | | | |
@@ -140,22 +152,76 @@ A switch takes `1` or `0`. It also takes `true` or `false`, `yes` or `no`, and `
 | `DATA_DIR` | `/data` | Folder in the container for your voices (`voices`) and the cache (`cache`). The Dockerfile sets it. | Do not change it. Mount your host folder to `/data`. |
 | `HF_HOME` | `/data/huggingface` | Folder for the models that the server downloads. The download library reads it. The Dockerfile sets it. | Do not change it. |
 | `STANZA_RESOURCES_DIR` | `/data/stanza` | Folder for the stress model. The stress library reads it. The Dockerfile sets it. | Do not change it. |
-| `HF_TOKEN` | empty | Hugging Face access token. The download library reads it. | Set it when Hugging Face limits the downloads of the first start. |
+| `HF_TOKEN` | empty | Hugging Face access token. The download library reads it. | Set it when Hugging Face limits the downloads of the first start. See "Hugging Face token". |
+| `HF_TOKEN_PATH` | empty | Path in the container to a file with the Hugging Face token, for example a Docker secret. | Use it instead of `HF_TOKEN` to keep the token out of the variables. See "Hugging Face token". |
 | `PUID`, `PGID` | `1000` | User and group of the container. Only docker-compose.yml reads them. | Change them when the folder `./data` belongs to another user. Make sure that this user can write into it. |
+| *Packages* | | | |
+| `UV_OVERRIDE` | empty | Path in the container to a file with package versions that replace the versions of the image. See "Overriding packages". | Set it when your GPU needs another build of a package, for example `/data/user_requirements.txt`. |
+| `UV_EXTRA_INDEX_URL` | empty | An extra package index for the versions in the `UV_OVERRIDE` file. The installer uv reads it. | Set it when a section of the override file names an index. |
+| `UV_CACHE_DIR` | `/data/uv_cache` | Folder for the downloads of uv. The Dockerfile sets it. | Do not change it. You can delete the folder when the container does not run. |
 | *Logs* | | | |
 | `LOG_LEVEL` | `INFO` | Amount of log text: `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`. `INFO` logs the text of each request. `DEBUG` also logs the verbalized text and the phonemes. | Set `DEBUG` to find out why a word sounds wrong. Set `WARNING` to keep the request texts out of the log. |
 
+</details>
+
 With docker-compose.yml, `HTTP_PORT` and `WYOMING_PORT` in `.env` choose the ports on the host. Inside the container, the servers keep the ports 8000 and 10200. To turn a server off, remove its line from `ports` in docker-compose.yml.
+
+## Hugging Face token
+
+The server downloads public models, so it needs no token. Set a token only when Hugging Face limits the downloads of the first start. A token with the "Read" role is enough. Create it at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens).
+
+The simple way is `HF_TOKEN=<token>` in `.env`. But Docker shows the value of each variable to anyone who can run `docker inspect`. To keep the token out of the variables, give it as a Docker secret.
+
+<details>
+<summary>Give the token as a Docker secret</summary>
+
+1. Put only the token into a file next to docker-compose.yml, for example `hf_token.txt`. The container user (`PUID`) must be able to read it.
+2. In docker-compose.yml, uncomment the two `secrets` blocks and the line `HF_TOKEN_PATH: /run/secrets/hf_token`.
+3. Remove `HF_TOKEN` from `.env`, and run `docker compose up -d`.
+
+The download library reads the token from the file that `HF_TOKEN_PATH` names.
+
+</details>
+
+## Overriding packages
+
+The image has fixed versions of its Python packages. Some GPUs need other builds. For example, a GTX 10xx card needs the CUDA 12 build of ONNX Runtime. You can replace the versions without a new image.
+
+<details>
+<summary>How to override packages</summary>
+
+1. Copy [user_requirements.txt.example](user_requirements.txt.example) to the data folder as `user_requirements.txt`.
+2. Uncomment the section for your GPU in that file, or write your own versions.
+3. Set `UV_OVERRIDE=/data/user_requirements.txt` in `.env`. The path is the path inside the container.
+4. If the section names an index, set `UV_EXTRA_INDEX_URL` to that index.
+5. Restart the container: `docker compose up -d`.
+
+Without `UV_OVERRIDE`, the container starts the server at once with the packages of the image.
+
+With `UV_OVERRIDE`, the container installs all packages of the image into `/data/venv` before the server starts. Each version in your file replaces the version of the image. The installer [uv](https://docs.astral.sh/uv/pip/compatibility/) does this work. It also reads `UV_EXTRA_INDEX_URL`.
+
+- The first start installs about 4.3 GB for the CUDA image. It takes several minutes, and the health check can show "unhealthy" until the server starts. Measured: 7.5 minutes.
+- A later start finds the packages installed and installs nothing. Measured: the check takes 1 s.
+- After you change the file or update the image, the next start installs only the changed packages.
+- If the file does not exist, the log shows a warning, and the server starts with the packages of the image.
+- To remove a package of the image, write it with a condition that is never true, for example `nvidia-cudnn-cu13 ; sys_platform == "never"`.
+
+To go back to the packages of the image, remove `UV_OVERRIDE` and restart the container. Then delete the folders `/data/venv` and `/data/uv_cache` to free the disk.
+
+</details>
 
 ## Memory and speed
 
 The models run in a separate process. After `UNLOAD_AFTER_SECONDS` without requests, the process unloads the models and gives their memory back to the system. The process stays alive and keeps its libraries, about 0.44 GB. The next request loads the models again.
 
+<details>
+<summary>Measured memory and speed</summary>
+
 Measured in containers on an Intel Core i9-13900HX and an RTX 4090 Laptop GPU. The text is "Пральна машина закінчила роботу о 15:30. Температура на вулиці -3°C, вологість 87%.", about 9 seconds of speech with the voice `Speaker_43`.
 
 | | CPU image | CUDA image |
 |---|---|---|
-| Image size | 1.3 GB | 4.8 GB |
+| Image size | 1.4 GB | 4.9 GB |
 | RAM of the model process with all models loaded | about 1.5 GB | |
 | GPU memory | | |
 | Time to make the speech with all models loaded | 1.3 s | |
@@ -173,6 +239,8 @@ RAM of each part in the CPU image, from separate measurements:
 | HolosTTS int8 model | about 0.3 GB |
 | Stress model (stanza) | about 0.2 GB |
 
+</details>
+
 ### Warm-up
 
 A warm-up loads the models in the background, one at a time. A request during a warm-up does not wait for the end of the warm-up. It waits for the model that loads at that moment, and then it loads the other models that its text needs. A text with digits needs all three models, so such a request right after the start of the container takes 6 to 7 s. Three things start a warm-up:
@@ -183,9 +251,14 @@ A warm-up loads the models in the background, one at a time. A request during a 
 
 After an unload, a warm-up loads the models again before the next request. A call of `POST /v1/warmup` while a warm-up runs does nothing new.
 
-When `VERBALIZER_UNLOAD_AFTER_SECONDS` is above 0, the warm-up and `PRELOAD` skip the verbalizer. The verbalizer then loads only for a text with digits, symbols, Latin letters or acronyms. This request takes 0.4 to 0.6 s more, and the verbalizer frees about 0.5 GB again after its time.
+<details>
+<summary>The warm-up and the verbalizer</summary>
+
+When `VERBALIZER_UNLOAD_AFTER_SECONDS` is above 0, the warm-up and `PRELOAD` skip the verbalizer. The verbalizer then loads only for a text with digits, symbols, Latin letters or acronyms. This request takes about 1 s more, and the verbalizer frees about 0.5 GB again after its time.
 
 With the default `0`, the verbalizer stays loaded once it is loaded. With `PRELOAD=1`, it is loaded at start. With `PRELOAD=0`, it loads at the first text that needs it.
+
+</details>
 
 ## API
 
@@ -213,7 +286,10 @@ Starts a warm-up in the background and returns the status 202 at once. The body 
 
 Call it shortly before the first request, so the models are in memory. This matters most when `UNLOAD_AFTER_SECONDS` is above 0. Measured: a request 6 s after the start of a warm-up takes 1.4 s. A request without a warm-up takes 3.4 to 5.7 s.
 
-An example for Home Assistant. First, add a REST command to `configuration.yaml`:
+<details>
+<summary>An example for Home Assistant</summary>
+
+First, add a REST command to `configuration.yaml`:
 
 ```yaml
 rest_command:
@@ -234,6 +310,8 @@ automation:
     actions:
       - action: rest_command.holos_tts_warmup
 ```
+
+</details>
 
 ### `GET /health`
 
@@ -256,8 +334,31 @@ uv run pytest
 uv run ruff check .
 ```
 
-The [justfile](justfile) has recipes for these commands and for a local container in [wslc](https://github.com/MicrosoftDocs/WSL/blob/main/WSL/wsl-container.md). Run `just help` to see them. For example, `just build` builds the CPU image, and `just run` starts it with the file `.env`. The container keeps the models and the cache in the folder `data` next to the justfile. `just say "Привіт"` writes the speech into `speech.mp3`.
+The [justfile](justfile) has recipes for these commands and for a local container in [wslc](https://github.com/MicrosoftDocs/WSL/blob/main/WSL/wsl-container.md). Run `just help` to see them. For example, `just build` builds the CPU image, and `just run` starts it with the file `.env`. The container keeps the models and the cache in the folder `data` next to the justfile. `just say "Привіт"` writes the speech into `data/speech.mp3` with the voice of `DEFAULT_VOICE`.
+
+## Credits
+
+This server only connects the work of other people to Home Assistant. Many thanks to all of them.
+
+Most of all, thank you to **Serhiy Stetskovych** ([patriotyk](https://github.com/patriotyk), [Hugging Face](https://huggingface.co/patriotyk)). He trained and published HolosTTS, the voices and the demo, and the earlier [StyleTTS2 Ukrainian](https://huggingface.co/spaces/patriotyk/styletts2-ukrainian) models. He also keeps the forks of the stress and IPA tools that the models need.
+
+| Part | Project | Authors | License |
+|---|---|---|---|
+| Speech model | [HolosTTS](https://huggingface.co/patriotyk/HolosTTS), [demo](https://huggingface.co/spaces/patriotyk/HolosTTS), [code](https://github.com/patriotyk/HolosTTS) | Serhiy Stetskovych | MIT (model) |
+| Numbers as words | [m2m100-ukr-verbalization](https://huggingface.co/skypro1111/m2m100-ukr-verbalization) and its [CTranslate2 build](https://huggingface.co/skypro1111/m2m100-ukr-verbalization-ct2) | Serhii Kravchenko ([skypro1111](https://huggingface.co/skypro1111)) | MIT |
+| Base of the verbalizer | [M2M100 418M](https://huggingface.co/facebook/m2m100_418M) | Meta AI | MIT |
+| Training text of the verbalizer | [UberText 2.0](https://aclanthology.org/2023.unlp-1.1/) news, [verbalized](https://huggingface.co/datasets/skypro1111/ubertext-2-news-verbalized) | Dmytro Chaplynskyi; Serhii Kravchenko | CC BY 4.0 (dataset) |
+| Stress marks | [ukrainian-word-stress](https://github.com/lang-uk/ukrainian-word-stress) ([fork](https://github.com/patriotyk/ukrainian-word-stress)) | Oleksiy Syvokon, lang-uk; Serhiy Stetskovych | MIT |
+| Stress dictionary | [ukrainian-word-stress-dictionary](https://github.com/lang-uk/ukrainian-word-stress-dictionary), from [«Словники України»](https://lcorp.ulif.org.ua/dictua/) | lang-uk; ULIF of the NAS of Ukraine | not given |
+| Stress of unknown words | [ukrainian-accentor](https://github.com/egorsmkv/ukrainian-accentor) | Yehor Smoliakov, Bohdan Mykhailenko | MIT |
+| Phonemes | [ipa-uk](https://github.com/lang-uk/ipa-uk) ([fork](https://github.com/patriotyk/ipa-uk)), after the Wiktionary module [uk-pronunciation](https://en.wiktionary.org/wiki/Module:uk-pronunciation) | Dmitry Chaplinsky, lang-uk; Serhiy Stetskovych | MIT |
+| Parts of speech for the stress | [stanza](https://github.com/stanfordnlp/stanza) and its [Ukrainian models](https://huggingface.co/stanfordnlp/stanza-uk), trained on [UD Ukrainian-IU](https://github.com/UniversalDependencies/UD_Ukrainian-IU) | Stanford NLP Group; Institute for Ukrainian | Apache-2.0; treebank CC BY-NC-SA 4.0 |
+| Runtimes | [ONNX Runtime](https://github.com/microsoft/onnxruntime), [CTranslate2](https://github.com/OpenNMT/CTranslate2) | Microsoft; OpenNMT | MIT |
+| Home Assistant protocol | [Wyoming](https://github.com/OHF-Voice/wyoming) | Michael Hansen, Open Home Foundation | MIT |
 
 ## Licenses
 
-This project uses the GPL-3.0 license. The HolosTTS model and the verbalizer model use the MIT license. The stanza models use the Apache-2.0 license.
+This project uses the GPL-3.0 license. The table in "Credits" gives the license of each part that the server downloads or installs. Two parts need care:
+
+- The voices of the model have no stated license. See "Voices".
+- The Ukrainian stanza models learned from the UD Ukrainian-IU treebank, which allows only non-commercial use (CC BY-NC-SA 4.0). Ask its authors before you use the server for a commercial product.

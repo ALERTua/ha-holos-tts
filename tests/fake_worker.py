@@ -9,6 +9,8 @@ import numpy as np
 from holos_tts.constants import MODEL_PARTS
 
 VOICES = ["Гаська Шиян", "Speaker_0"]
+# a "SLOW" request must outlast two pauses of a test, so a test can cancel it twice while the worker still runs it
+SLOW_SECONDS = 0.25
 
 
 def run(conn, settings):
@@ -57,7 +59,7 @@ def synthesize(text, speed):
         os._exit(1)
 
     if "SLOW" in text:
-        time.sleep(0.5)
+        time.sleep(SLOW_SECONDS)
 
     if "JITTER" in text:
         time.sleep(random.uniform(0, 0.03))  # noqa: S311
@@ -73,3 +75,62 @@ def synthesize(text, speed):
 
     # one sample per character, so a test can see which chunk came back
     return ("ok", np.full(len(text), speed / 10, dtype=np.float32))
+
+
+def refusing_unload_worker(conn, settings):
+    """A fake worker that answers each ``unload`` with an error and counts them."""
+    unloads = 0
+    while True:
+        try:
+            command, *_args = conn.recv()
+        except EOFError:
+            return
+
+        if command == "exit":
+            return
+
+        if command == "unload":
+            unloads += 1
+            result = ("error", "RuntimeError: cannot unload")
+        elif command == "status":
+            result = ("ok", {"unloads": unloads})
+        elif command == "voices":
+            result = ("ok", VOICES)
+        else:
+            result = ("error", f"unknown command {command}")
+
+        conn.send(result)
+
+
+LOAD_SECONDS = 0.1
+
+
+def warm_up_worker(conn, settings):
+    """A fake worker that knows ``load_part`` and tells the order of the commands that it got."""
+    log = []
+    while True:
+        try:
+            command, *args = conn.recv()
+        except EOFError:
+            return
+
+        if command == "exit":
+            return
+
+        if command == "status":
+            conn.send(("ok", {"log": log}))
+            continue
+
+        log.append(f"{command} {args[0]}" if command == "load_part" else command)
+        if command == "voices":
+            result = ("ok", VOICES)
+        elif command == "load_part":
+            time.sleep(LOAD_SECONDS)
+            result = ("ok", {args[0]: True})
+        elif command == "synth":
+            _sentences, _voice, speed = args
+            result = ("ok", np.full(3, speed / 10, dtype=np.float32))
+        else:
+            result = ("error", f"unknown command {command}")
+
+        conn.send(result)

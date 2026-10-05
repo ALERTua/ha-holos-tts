@@ -1,0 +1,20 @@
+# Keep LF in the repository and in each working tree, also on Windows.
+# The image runs the shell scripts in Linux, where a CRLF line ending breaks them.
+* text=auto eol=lf
+
+# cmd.exe needs CRLF in its scripts
+*.cmd text eol=crlf
+*.CMD text eol=crlf
+*.bat text eol=crlf
+*.BAT text eol=crlf
+
+# Binary files: no line-ending conversion, no text diff, no text merge
+*.png binary
+*.jpg binary
+*.ico binary
+*.mp3 binary
+*.wav binary
+*.onnx binary
+*.pt binary
+*.npy binary
+*.npz binary
