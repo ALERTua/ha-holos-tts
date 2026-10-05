@@ -122,15 +122,19 @@ class Worker:
         self._phonemizer = self._engine = self._verbalizer = None
         release_free_memory()
 
+    def verbalize(self, sentences: list[str]) -> str:
+        """Return the sentences with numbers and symbols written as words, joined by spaces."""
+        # the verbalizer loads only for sentences that have something to rewrite
+        verbalizer = self.verbalizer if any(needs_verbalization(sentence) for sentence in sentences) else None
+        return " ".join(verbalize_sentence(sentence, verbalizer) for sentence in sentences)
+
     def synthesize(self, sentences: list[str], voice: str, speed: float) -> np.ndarray:
         """Return the audio of one chunk of sentences."""
         if voice not in self.voices:
             msg = f"Unknown voice {voice!r}"
             raise KeyError(msg)
 
-        # the verbalizer loads only for a chunk that has something to rewrite
-        verbalizer = self.verbalizer if any(needs_verbalization(sentence) for sentence in sentences) else None
-        text = " ".join(verbalize_sentence(sentence, verbalizer) for sentence in sentences)
+        text = self.verbalize(sentences)
         phonemes = self.phonemizer(text)
         LOG.debug("Phonemes of %r: %s", text, phonemes)
         if not phonemes:
@@ -149,7 +153,7 @@ class Worker:
             "rss_mb": round(psutil.Process().memory_info().rss / 2**20),
         }
 
-    def handle(self, message: tuple[Any, ...]) -> Any:
+    def handle(self, message: tuple[Any, ...]) -> Any:  # noqa: PLR0911 - one return for each command
         """Run one request of the main process."""
         command, *args = message
         if command == "voices":
@@ -173,6 +177,11 @@ class Worker:
             # each request leaves freed buffers of the models behind
             release_free_memory()
             return audio
+
+        if command == "verbalize":
+            text = self.verbalize(*args)
+            release_free_memory()
+            return text
 
         if command == "status":
             return self.status()

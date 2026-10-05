@@ -8,6 +8,7 @@ requires-python = "==3.12.*"
 dependencies = [
     "ctranslate2",
     "fastapi",
+    "gradio",
     "huggingface-hub",
     "ipa-uk",
     "numpy",
@@ -37,6 +38,7 @@ holos-tts = "holos_tts.__main__:run"
 [dependency-groups]
 dev = [
     "httpx",
+    "pre-commit-uv",
     "pytest",
     "pytest-asyncio",
     "pytest-cov",

@@ -153,6 +153,14 @@ class Synthesizer:
             audio = await self._request("synth", chunk, resolved, speed)
             yield audio
 
+    async def verbalize(self, text: str) -> str:
+        """Return ``text`` with numbers, dates, units and acronyms written as words."""
+        sentences = prepare_sentences(text)
+        if not sentences:
+            return ""
+
+        return await self._request("verbalize", sentences)
+
     async def _warm_up(self) -> None:
         # one request for each model, so a synthesis that waits for the lock runs between two loads
         status = None

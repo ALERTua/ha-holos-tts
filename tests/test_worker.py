@@ -155,3 +155,27 @@ def test_load_part_skips_a_verbalizer_that_the_settings_turn_off(empty_worker):
 def test_load_part_refuses_an_unknown_model(empty_worker):
     with pytest.raises(ValueError, match="voices"):
         empty_worker().handle(("load_part", "voices"))
+
+
+def test_verbalize_sends_only_a_text_with_numbers_to_the_verbalizer(fake_worker):
+    assert fake_worker.verbalize(["Зустріч о 7.", "Без цифр."]) == "Зустріч о сьомій. Без цифр."
+    assert FakeVerbalizer.calls == ["Зустріч о 7."]
+
+
+def test_verbalize_command_does_not_load_the_verbalizer_for_a_text_without_numbers(fake_worker):
+    assert fake_worker.handle(("verbalize", ["Двері відчинені.", "Так."])) == "Двері відчинені. Так."
+    assert fake_worker.status()["verbalizer"] is False
+    assert FakeVerbalizer.calls == []
+
+
+def test_verbalize_command_returns_the_text_as_it_is_when_the_settings_turn_the_verbalizer_off(empty_worker):
+    w = empty_worker(verbalize=False)
+    assert w.handle(("verbalize", ["Зустріч о 7."])) == "Зустріч о 7."
+    assert Recorder.built == []
+
+
+def test_verbalize_command_releases_the_free_memory(fake_worker, monkeypatch):
+    calls = []
+    monkeypatch.setattr(worker, "release_free_memory", lambda: calls.append(1))
+    fake_worker.handle(("verbalize", ["О 7."]))
+    assert calls == [1]

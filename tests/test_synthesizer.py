@@ -443,3 +443,19 @@ async def test_synthesis_right_after_start_waits_only_for_the_model_that_loads_n
         ]
     finally:
         await synth.stop()
+
+
+async def test_verbalize_sends_the_sentences_of_the_synthesis_split_to_the_worker(synthesizer):
+    # the date gets its month word in the main process, the fake worker writes each 7 as a word
+    text = "Зустріч 07.08.2025. Лишилось 7."
+    assert await synthesizer.verbalize(text) == "Зустріч сім серпня 2025 року. Лишилось сім."
+
+
+async def test_verbalize_of_an_empty_text_does_not_start_the_worker(synthesizer):
+    assert await synthesizer.verbalize("  \n ") == ""
+    assert not synthesizer.worker_running
+
+
+async def test_verbalize_shows_a_worker_error_as_a_synthesis_error(synthesizer):
+    with pytest.raises(SynthesisError, match="bad text"):
+        await synthesizer.verbalize("FAIL")

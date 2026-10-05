@@ -119,4 +119,10 @@ def create_app(synthesizer: Synthesizer) -> FastAPI:
     async def health() -> dict[str, Any]:
         return {"status": "ok", **await synthesizer.status()}
 
+    if synthesizer.settings.web_ui:
+        # the import is lazy, so a server without the web page does not load gradio
+        from .web_ui import mount  # noqa: PLC0415
+
+        mount(app, synthesizer)
+
     return app

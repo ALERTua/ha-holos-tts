@@ -14,32 +14,32 @@ data := justfile_directory() / "data"
 # the same variables as in .env; the file .env passes the other variables into the container
 http_port := env("HTTP_PORT", "8000")
 wyoming_port := env("WYOMING_PORT", "10200")
-default_voice := env("DEFAULT_VOICE", "Speaker_43")
+default_voice := env("DEFAULT_VOICE", "Speaker_67")
 puid := env("PUID", "1000")
 pgid := env("PGID", "1000")
 url := "http://127.0.0.1:" + http_port
 
-# Install the CPU dependencies and the development tools into .venv
+# Install the CPU dependencies and all dependency groups into .venv
 install:
-    uv sync --extra cpu
+    uv sync --all-groups --extra cpu
 
-# Update the dependencies in uv.lock to the newest allowed versions and install them
+# Update the dependencies in uv.lock to the newest allowed versions (older than a week) and install them
 upgrade:
-    uv sync --extra cpu --upgrade
+    uv sync --all-groups --extra cpu --upgrade
 
 # Format the code, fix the lint findings that ruff can fix, and check the types with ty
 lint:
     uv run ruff format .
     uv run ruff check --fix
-    uvx --with pre-commit-uv pre-commit run ty --all-files
+    uv run pre-commit run ty --all-files
 
 # Run all pre-commit hooks on all files
 pre:
-    uvx --with pre-commit-uv pre-commit run --all-files
+    uv run pre-commit run --all-files
 
 # Update the hook versions in .pre-commit-config.yaml
 pre-update:
-    uvx --with pre-commit-uv pre-commit autoupdate
+    uv run pre-commit autoupdate
 
 # Run all tests
 test:

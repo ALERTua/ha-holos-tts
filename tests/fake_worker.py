@@ -47,6 +47,8 @@ def run(conn, settings):
         elif command == "synth":
             sentences, _voice, speed = args
             result = synthesize(" ".join(sentences), speed)
+        elif command == "verbalize":
+            result = verbalize(args[0])
         else:
             result = ("error", f"unknown command {command}")
 
@@ -75,6 +77,15 @@ def synthesize(text, speed):
 
     # one sample per character, so a test can see which chunk came back
     return ("ok", np.full(len(text), speed / 10, dtype=np.float32))
+
+
+def verbalize(sentences):
+    """Return the sentences joined by spaces, with each digit 7 written as a word. A "FAIL" sentence is an error."""
+    text = " ".join(sentences)
+    if "FAIL" in text:
+        return ("error", "ValueError: bad text")
+
+    return ("ok", text.replace("7", "сім"))
 
 
 def refusing_unload_worker(conn, settings):

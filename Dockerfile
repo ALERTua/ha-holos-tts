@@ -106,6 +106,7 @@ ENV \
     HF_HOME=/data/huggingface \
     STANZA_RESOURCES_DIR=/data/stanza \
     HF_HUB_DISABLE_TELEMETRY=1 \
+    GRADIO_ANALYTICS_ENABLED=False \
     HTTP_PORT=8000 \
     WYOMING_PORT=10200 \
     UV_CACHE_DIR=/data/uv_cache \

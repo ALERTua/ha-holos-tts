@@ -96,7 +96,7 @@ To load the models before a voice command, see `POST /v1/warmup` in the API sect
 
 ## Voices
 
-The model has 27 voices: "Гаська Шиян" and the numbered voices "Speaker_0" to "Speaker_84". `GET /v1/audio/voices` gives the list. The default voice is `Speaker_43`.
+The model has 27 voices: "Гаська Шиян" and the numbered voices "Speaker_0" to "Speaker_84". `GET /v1/audio/voices` gives the list. The default voice is `Speaker_67`.
 
 The model card does not tell whose voices these are, and it gives no license for the voices. For the voices of his older model, [styletts2-ukrainian](https://huggingface.co/spaces/patriotyk/styletts2-ukrainian/discussions/11), the author wrote that they are the voices of well-known voice actors and that they should not be used. For public content, such as a video or a podcast, use your own cloned voice (see below).
 
@@ -118,6 +118,12 @@ The stress model can choose a wrong stress. To set a stress, put `+` after the s
 
 The server splits a sentence longer than 150 characters at commas, then at spaces. The model cannot speak a longer piece in one pass.
 
+## Web UI
+
+Set `WEB_UI=1` to add a web page to the server. Open `http://<host>:8000/web/` in a browser, type a text, choose a voice and the speed, and press "Speak". The page uses the same speech pipeline as the API, so the verbalizer and the stress marks work the same way. Press "Verbalize" to replace the text with its verbalized form (numbers, dates, units and acronyms written as words), so you can check and edit it before "Speak".
+
+The page has no password and uses the port of the API. Turn it on only in a network that you trust. The page adds about 80 MB to the RAM of the main process. When `WEB_UI` is off, the server does not load the web page library at all.
+
 ## Configuration
 
 Set a variable in the file `.env`. If you run the image without Docker Compose, use `-e NAME=value` instead. When the server cannot use a value, it stops at start, and the log names the variable.
@@ -136,8 +142,9 @@ The file [.env.example](.env.example) explains each setting in plain words.
 | `WYOMING_PORT` | `10200` | Port of the Wyoming server for Home Assistant. `0` turns the server off when you run the image without docker-compose.yml. | Change it when another program uses port 10200 on the host. |
 | `HTTP_HOST` | `0.0.0.0` | Network address that the API listens on. `0.0.0.0` means all addresses. | In a container, keep it. Without Docker, set `127.0.0.1` to accept only requests from the same computer. |
 | `WYOMING_HOST` | `0.0.0.0` | Network address that the Wyoming server listens on. | Same as `HTTP_HOST`. |
+| `WEB_UI` | `0` | `1` adds a web page at `/web/` on the port of the API. See "Web UI". | Set `1` to try the voices and the speed in a browser. The page has no password. |
 | *Voice and speed* | | | |
-| `DEFAULT_VOICE` | `Speaker_43` | Voice for requests without a voice, and for unknown voice names. It must be a name from `GET /v1/audio/voices`. | Change it to use another voice in the Wyoming integration, or with clients that send a name such as "alloy". |
+| `DEFAULT_VOICE` | `Speaker_67` | Voice for requests without a voice, and for unknown voice names. It must be a name from `GET /v1/audio/voices`. | Change it to use another voice in the Wyoming integration, or with clients that send a name such as "alloy". |
 | `DEFAULT_SPEED` | `1.0` | Speed of the Wyoming speech, and of OpenAI requests without a speed. The range is `0.5` to `2.0`. A value outside the range stops the server. | Change it when the speech is too fast or too slow. The Wyoming protocol has no speed field. |
 | `VERBALIZE` | `1` | `1` writes numbers, dates, units and acronyms as words before the speech. `0` turns the verbalizer off. `AUTO_USE_VERBALIZER` is the old name. The server reads it when `VERBALIZE` is not set. | Set `0` only when your texts have no digits or symbols. Then the server does not download the verbalizer (1.9 GB) and saves about 0.5 GB of memory. |
 | *Models and memory* | | | |
@@ -217,7 +224,7 @@ The models run in a separate process. After `UNLOAD_AFTER_SECONDS` without reque
 <details>
 <summary>Measured memory and speed</summary>
 
-Measured in containers on an Intel Core i9-13900HX and an RTX 4090 Laptop GPU. The text is "Пральна машина закінчила роботу о 15:30. Температура на вулиці -3°C, вологість 87%.", about 9 seconds of speech with the voice `Speaker_43`.
+Measured in containers on an Intel Core i9-13900HX and an RTX 4090 Laptop GPU. The text is "Пральна машина закінчила роботу о 15:30. Температура на вулиці -3°C, вологість 87%.", about 9 seconds of speech with the voice `Speaker_67`.
 
 | | CPU image | CUDA image |
 |---|---|---|
@@ -278,7 +285,7 @@ curl http://127.0.0.1:8000/v1/audio/speech -H "Content-Type: application/json" -
 
 ### `GET /v1/audio/voices`
 
-Returns `{"voices": ["Speaker_43", "Гаська Шиян", "Speaker_0", ...]}`. The default voice is first.
+Returns `{"voices": ["Speaker_67", "Гаська Шиян", "Speaker_0", ...]}`. The default voice is first.
 
 ### `POST /v1/warmup`
 

@@ -108,10 +108,11 @@ class Settings:
     data_dir: Path = field(default_factory=lambda: Path("/data"))
     device: str = "cpu"
     verbalizer_device: str = "cpu"
-    default_voice: str = "Speaker_43"
+    default_voice: str = "Speaker_67"
     default_speed: float = 1.0
     verbalize: bool = True
     preload: bool = True
+    web_ui: bool = False
     unload_after_seconds: int = 0
     verbalizer_unload_after_seconds: int = 0
     threads: int = 0
@@ -151,6 +152,7 @@ class Settings:
                 default=_bool(env, "AUTO_USE_VERBALIZER", default=defaults.verbalize),
             ),
             preload=_bool(env, "PRELOAD", default=defaults.preload),
+            web_ui=_bool(env, "WEB_UI", default=defaults.web_ui),
             unload_after_seconds=_int(env, "UNLOAD_AFTER_SECONDS", default=defaults.unload_after_seconds),
             verbalizer_unload_after_seconds=_int(
                 env,

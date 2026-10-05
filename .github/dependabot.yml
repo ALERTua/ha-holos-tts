@@ -12,6 +12,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # the same delay as exclude-newer = "1 week" in pyproject.toml, else uv refuses the proposed version
+    cooldown:
+      default-days: 7
   # base images in the Dockerfile
   - package-ecosystem: docker
     directory: "/"

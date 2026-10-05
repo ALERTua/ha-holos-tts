@@ -16,13 +16,14 @@ def cpu_max(tmp_path, monkeypatch):
 
 def test_defaults():
     settings = Settings.from_env({})
-    assert settings.default_voice == "Speaker_43"
+    assert settings.default_voice == "Speaker_67"
     assert settings.threads == 0
     assert settings.http_port == 8000
     assert settings.wyoming_port == 10200
     assert settings.device == "cpu"
     assert settings.verbalizer_device == "cpu"
     assert settings.verbalize is True
+    assert settings.web_ui is False
     assert settings.voices_dir == Path("/data/voices")
 
 
@@ -35,6 +36,7 @@ def test_values_from_env():
             "DEFAULT_VOICE": "Speaker_0",
             "DEFAULT_SPEED": "1.15",
             "UNLOAD_AFTER_SECONDS": "60",
+            "WEB_UI": "1",
             "DATA_DIR": "/srv/tts",
         }
     )
@@ -45,6 +47,7 @@ def test_values_from_env():
     assert settings.default_voice == "Speaker_0"
     assert settings.default_speed == pytest.approx(1.15)
     assert settings.unload_after_seconds == 60
+    assert settings.web_ui is True
     assert settings.voices_dir == Path("/srv/tts/voices")
 
 
@@ -104,6 +107,7 @@ def test_explicit_threads_win_over_cpu_limit(cpu_max):
         {"DEFAULT_SPEED": "3"},
         {"DEFAULT_SPEED": "fast"},
         {"PRELOAD": "maybe"},
+        {"WEB_UI": "maybe"},
     ],
 )
 def test_bad_values_are_refused(env):
