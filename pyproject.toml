@@ -1,0 +1,70 @@
+[project]
+name = "holos-tts"
+version = "0.1.0"
+description = "Ukrainian HolosTTS speech server for Home Assistant: Wyoming and OpenAI-compatible APIs"
+readme = "README.md"
+license = "GPL-3.0-only"
+requires-python = "==3.12.*"
+dependencies = [
+    "ctranslate2>=4.6",
+    "fastapi>=0.115",
+    "huggingface-hub>=0.34",
+    "ipa-uk",
+    "numpy>=1.26",
+    "psutil>=7.0",
+    "sentencepiece>=0.2",
+    "soundfile>=0.13",
+    "torch==2.8.0",
+    "ukrainian-word-stress",
+    "uvicorn>=0.35",
+    "wyoming>=1.8",
+]
+
+[project.optional-dependencies]
+cpu = [
+    "onnxruntime>=1.22",
+]
+cuda = [
+    "onnxruntime-gpu[cuda,cudnn]>=1.22",
+    # ONNX Runtime brings the CUDA 13 libraries, but the CTranslate2 wheels of the verbalizer need cuBLAS of CUDA 12
+    "nvidia-cublas-cu12>=12.4",
+    "nvidia-cuda-runtime-cu12>=12.4",
+]
+
+[project.scripts]
+holos-tts = "holos_tts.__main__:run"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28",
+    "pytest>=8.4",
+    "pytest-asyncio>=1.1",
+    "ruff>=0.12",
+]
+
+[build-system]
+requires = ["uv_build>=0.8,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv]
+conflicts = [
+    [
+        { extra = "cpu" },
+        { extra = "cuda" },
+    ],
+]
+
+# torch only runs the stanza tagger of the stress model, so the small CPU build is enough in both images
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+ipa-uk = { git = "https://github.com/patriotyk/ipa-uk.git", rev = "3faf05ec50fd4880965b6c76f8e479a4f82117f5" }
+ukrainian-word-stress = { git = "https://github.com/patriotyk/ukrainian-word-stress.git", rev = "d5b37ea0abe9711930d9c3b0b13edec5a0675512" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

@@ -1,0 +1,30 @@
+services:
+  holos-tts:
+    # CPU image. For an NVIDIA GPU use the tag "latest-cuda" and uncomment the "deploy" block below.
+    image: ghcr.io/alertua/holos-tts:latest
+    container_name: holos-tts
+    restart: unless-stopped
+    user: "${PUID:-1000}:${PGID:-1000}"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # the servers in the container keep these ports; HTTP_PORT and WYOMING_PORT in .env choose the host ports
+      HTTP_PORT: 8000
+      WYOMING_PORT: 10200
+    ports:
+      # OpenAI-compatible API
+      - "${HTTP_PORT:-8000}:8000"
+      # Wyoming protocol for the Wyoming integration of Home Assistant
+      - "${WYOMING_PORT:-10200}:10200"
+    volumes:
+      # models, the stress dictionary and your own voices (./data/voices)
+      - ./data:/data
+
+#    deploy:
+#      resources:
+#        reservations:
+#          devices:
+#            - driver: nvidia
+#              count: 1
+#              capabilities: [gpu]
