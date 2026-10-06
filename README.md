@@ -238,7 +238,7 @@ Measured in containers on an Intel Core i9-13900HX and an RTX 4090 Laptop GPU. T
 
 | | CPU image | CUDA image |
 |---|---|---|
-| Image size | 1.4 GB | 4.9 GB |
+| Image size | about 1.6 GB | 4.9 GB |
 | RAM of the model process with all models loaded | about 1.5 GB | |
 | GPU memory | | |
 | Time to make the speech with all models loaded | 1.3 s | |

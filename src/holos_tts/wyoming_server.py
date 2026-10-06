@@ -1,9 +1,8 @@
 """
-Wyoming text-to-speech server: the protocol of the Wyoming integration that Home Assistant has built in.
+Wyoming TTS server for Home Assistant.
 
-Home Assistant sends a ``synthesize`` event with the whole text, or a ``synthesize-start``, ``synthesize-chunk``,
-``synthesize-stop`` stream when an LLM writes the answer piece by piece. The server answers with ``audio-start``,
-``audio-chunk`` events and ``audio-stop``. A stream also ends with ``synthesize-stopped``.
+A ``synthesize`` event or a ``synthesize-start``/``-chunk``/``-stop`` stream comes in.
+``audio-start``, ``audio-chunk`` and ``audio-stop`` go out, and a stream ends with ``synthesize-stopped``.
 """
 
 from __future__ import annotations

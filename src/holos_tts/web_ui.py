@@ -38,7 +38,7 @@ async def speak(synthesizer: Synthesizer, text: str, voice: str | None, *, speed
         raise gr.Error(str(e)) from e
 
     audio = np.concatenate(parts) if parts else np.zeros(0, dtype=np.float32)
-    # Gradio would scale a float array to full scale, so the page converts it the same way as the WAV file of the API
+    # gradio rescales float audio, so the page sends the 16-bit samples of the API WAV
     return SAMPLE_RATE, np.frombuffer(to_pcm16(fit_level(audio)), dtype="<i2")
 
 
