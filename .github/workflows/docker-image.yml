@@ -72,11 +72,3 @@ jobs:
       free-disk-space: ${{ matrix.target == 'cuda' }}
       alert-server: ${{ github.event_name != 'workflow_dispatch' || inputs.alert-server }}
       push: ${{ github.event_name == 'workflow_dispatch' && inputs.push }}
-
-  # one comment with the results of both images on the open pull request of the branch
-  report:
-    needs: build-and-publish
-    if: always()
-    uses: ALERTua/ci-workflows/.github/workflows/pr-report.yml@v4.0.0
-    permissions:
-      pull-requests: write # comment of the build results on the open pull request of the branch
