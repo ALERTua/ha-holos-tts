@@ -24,6 +24,14 @@ class Call:
     providers: list[str]
     threads: int
     arena: bool
+    precision: str | None
+
+
+def _config_entry(options: ort.SessionOptions, key: str) -> str | None:
+    try:
+        return options.get_session_config_entry(key)
+    except RuntimeError:
+        return None
 
 
 class FakeSession:
@@ -54,6 +62,7 @@ class FakeInferenceSession:
                 providers,
                 options.intra_op_num_threads,
                 options.enable_cpu_mem_arena,
+                _config_entry(options, engine.QUANT_PRECISION_ENTRY),
             )
         )
         if path in self.unloadable or path in self.unloadable_once:
@@ -98,6 +107,8 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(ort, "__version__", "0.0.1")
     monkeypatch.setattr(engine, "MODEL_REVISION", "test-revision")
     monkeypatch.setattr(engine, "_FAILED_SAVES", set())
+    # no flags line: the tests that need the CPU features write this file
+    monkeypatch.setattr(engine, "CPUINFO", tmp_path / "cpuinfo")
     monkeypatch.setitem(engine.ONNX_FILES, "cpu", MODEL_FILE)
     monkeypatch.setitem(engine.ONNX_FILES, "cuda", "tiny_cuda.onnx")
     monkeypatch.setattr(engine, "hf_hub_download", lambda *_args, **_kwargs: str(model))
@@ -412,3 +423,88 @@ def test_cpu_flags_fall_back_when_proc_cpuinfo_has_no_flags_line(cpuinfo):
 def test_cpu_flags_fall_back_without_proc_cpuinfo(cpuinfo):
     assert not cpuinfo.exists()
     assert engine._cpu_flags() == "test-cputest-arch"
+
+
+X86_FLAGS = "fpu sse2 sse4_1 avx fma avx2"
+
+
+def _write_flags(path: Path, flags: str) -> None:
+    path.write_text(f"processor\t: 0\nmodel name\t: Test CPU\nflags\t\t: {flags}\n", encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("flags", "expected"),
+    [
+        (X86_FLAGS, True),
+        (f"{X86_FLAGS} avx_vnni", False),
+        (f"{X86_FLAGS} avx512f avx512_vnni", False),
+        # a longer flag that only contains the name is not VNNI
+        (f"{X86_FLAGS} avx_vnni_int8x", True),
+    ],
+)
+def test_quant_precision_follows_the_vnni_flags(cpuinfo, flags, expected):
+    _write_flags(cpuinfo, flags)
+
+    assert engine._needs_quant_precision() is expected
+
+
+def test_quant_precision_is_off_without_a_flags_line(cpuinfo):
+    cpuinfo.write_text("processor\t: 0\nFeatures\t: fp asimd\n", encoding="utf-8")
+
+    assert engine._needs_quant_precision() is False
+
+
+def test_quant_precision_is_off_without_proc_cpuinfo(cpuinfo):
+    assert engine._needs_quant_precision() is False
+
+
+def test_cpu_without_vnni_saves_and_loads_with_the_exact_int8_matmul(env):
+    _write_flags(engine.CPUINFO, X86_FLAGS)
+
+    HolosEngine({}, cache_dir=env.cache_dir)
+
+    assert [call.precision for call in env.sessions.calls] == ["1", "1"]
+
+
+def test_cpu_without_vnni_hit_loads_with_the_exact_int8_matmul(env):
+    _write_flags(engine.CPUINFO, X86_FLAGS)
+    env.onnx_dir.mkdir(parents=True)
+    env.cached.write_bytes(OPTIMIZED)
+
+    HolosEngine({}, cache_dir=env.cache_dir)
+
+    assert [(call.path, call.precision) for call in env.sessions.calls] == [(str(env.cached), "1")]
+
+
+def test_cpu_without_vnni_fallback_uses_the_exact_int8_matmul(env):
+    _write_flags(engine.CPUINFO, X86_FLAGS)
+    env.sessions.unsavable = True
+
+    HolosEngine({}, cache_dir=env.cache_dir)
+
+    assert [call.precision for call in env.sessions.calls] == ["1", "1"]
+
+
+def test_cpu_with_vnni_keeps_the_fast_int8_matmul(env):
+    _write_flags(engine.CPUINFO, f"{X86_FLAGS} avx_vnni")
+
+    HolosEngine({}, cache_dir=env.cache_dir)
+
+    assert [call.precision for call in env.sessions.calls] == [None, None]
+
+
+def test_cuda_never_sets_the_exact_int8_matmul(env):
+    _write_flags(engine.CPUINFO, X86_FLAGS)
+
+    HolosEngine({}, device="cuda", cache_dir=env.cache_dir)
+
+    assert [call.precision for call in env.sessions.calls] == [None]
+
+
+def test_key_changes_when_the_exact_int8_matmul_turns_on(monkeypatch):
+    monkeypatch.setattr(engine, "_cpu_flags", lambda: f"flags: {X86_FLAGS}")
+    monkeypatch.setattr(engine, "_needs_quant_precision", lambda: False)
+    without = engine._cache_key(MODEL_FILE, "0.0.1")
+    monkeypatch.setattr(engine, "_needs_quant_precision", lambda: True)
+
+    assert engine._cache_key(MODEL_FILE, "0.0.1") != without

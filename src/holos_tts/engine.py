@@ -31,6 +31,9 @@ ONNX_FILES = {"cpu": "holos_cpu_int8.onnx", "cuda": "holos.onnx"}
 VOICES_FILE = "voices.pt"
 ONNX_CACHE_FOLDER = "onnx"
 CPUINFO = Path("/proc/cpuinfo")
+# ONNX Runtime: the U8S8 int8 matmul overflows on x86 without VNNI, and this entry selects the exact U8U8 kernels
+QUANT_PRECISION_ENTRY = "session.x64quantprecision"
+VNNI_FLAGS = frozenset({"avx_vnni", "avx512_vnni"})
 
 # The symbol table of the HolosTTS checkpoint at MODEL_REVISION. The table has the apostrophe three times.
 # The tokenizer of the checkpoint keeps the last index of a repeated symbol, and so does this one.
@@ -124,9 +127,16 @@ def _cpu_flags() -> str:
     return platform.processor() + platform.machine()
 
 
+def _needs_quant_precision() -> bool:
+    """Return True on an x86 CPU without VNNI, where the fast int8 matmul of ONNX Runtime gives broken speech."""
+    label, _, flags = _cpu_flags().partition(":")
+    return label.strip() == "flags" and VNNI_FLAGS.isdisjoint(flags.split())
+
+
 def _cache_key(model_file: str, ort_version: str) -> str:
     """Return the key of a cached graph: the graph depends on the model, the ONNX Runtime version and the CPU."""
-    parts = (MODEL_REVISION, model_file, ort_version, _cpu_flags())
+    # a graph saved without the exact int8 matmul stays broken when a session with it loads the graph
+    parts = (MODEL_REVISION, model_file, ort_version, _cpu_flags(), f"quant-precision={_needs_quant_precision()}")
     return hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
 
 
@@ -139,6 +149,8 @@ def _session_options(ort: ModuleType, threads: int, *, cpu: bool) -> Any:
     if cpu:
         # the arena keeps the buffers of the longest chunk (about 300 MB), with no speed gain
         options.enable_cpu_mem_arena = False
+        if _needs_quant_precision():
+            options.add_session_config_entry(QUANT_PRECISION_ENTRY, "1")
 
     return options
 
@@ -236,6 +248,8 @@ class HolosEngine:
 
         model_file = ONNX_FILES[device]
         LOG.info("Loading the HolosTTS model %s on %s", model_file, device)
+        if device == "cpu" and _needs_quant_precision():
+            LOG.info("The CPU has no VNNI, so ONNX Runtime uses the slower exact int8 matrix multiplication")
         path = hf_hub_download(MODEL_REPO, model_file, revision=MODEL_REVISION)
         if device == "cpu" and cache_dir is not None:
             self._session = _cpu_session(ort, path, model_file, threads=threads, cache_dir=cache_dir)
