@@ -238,14 +238,16 @@ Measured in containers on an Intel Core i9-13900HX and an RTX 4090 Laptop GPU. T
 
 | | CPU image | CUDA image |
 |---|---|---|
-| Image size | about 1.6 GB | 4.9 GB |
-| RAM of the model process with all models loaded | about 1.5 GB | |
-| GPU memory | | |
-| Time to make the speech with all models loaded | 1.3 s | |
-| RAM after `UNLOAD_AFTER_SECONDS` | 0.44 GB | |
-| First request after the unload | 3.5 s | |
-| First request after the start of the container, with no warm-up | 5.7 s | |
-| Request 6 s after the start of a warm-up | 1.4 s | |
+| Image size | about 1.6 GB | about 5.1 GB |
+| RAM of the model process with all models loaded | about 1.5 GB | about 2.1 GB |
+| GPU memory | | about 1.9 GB |
+| Time to make the speech with all models loaded | 1.3 s | 0.5 s |
+| RAM after `UNLOAD_AFTER_SECONDS` | 0.44 GB | about 1.8 GB |
+| First request after the unload | 3.5 s | 7.4 s |
+| First request after the start of the container, with no warm-up | 5.7 s | 10.5 s |
+| Request 6 s after the start of a warm-up | 1.4 s | 3.9 s |
+
+In the CUDA image, the model process uses about 1.1 GB right after the load. It grows to about 2.1 GB with the first request. The GPU memory stays the same, and the verbalizer runs on the GPU. After an unload, about 0.3 GB of GPU memory stays in use.
 
 RAM of each part in the CPU image, from separate measurements:
 
