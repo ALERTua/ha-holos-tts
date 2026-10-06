@@ -49,7 +49,7 @@ jobs:
           - target: cuda
             suffix: "-cuda"
     # builds on buildkit of alert-server when it answers through the tailnet, otherwise on GitHub
-    uses: ALERTua/ci-workflows/.github/workflows/docker-build.yml@b7674e2a84144ce2be6855ad852d859df7f5ac88 # docker-build
+    uses: ALERTua/ci-workflows/.github/workflows/docker-build.yml@0baaaa65f8bdac76473e6f14a3a74fa3fa635875 # docker-build
     permissions:
       contents: read # checkout
       packages: write # push of the images to ghcr.io
