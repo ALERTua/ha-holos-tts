@@ -10,10 +10,11 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import re
 import shutil
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import ctranslate2
 import sentencepiece
@@ -21,6 +22,10 @@ from huggingface_hub import hf_hub_download, snapshot_download
 
 from .cache_files import partials
 from .ct2_int8 import convert_to_int8
+from .text import governing_preposition, halve_for_verbalizer
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 LOG = logging.getLogger(__name__)
 
@@ -35,6 +40,18 @@ SPECIAL_TOKENS = frozenset({"<s>", END_TOKEN, "<pad>", UNKNOWN_TOKEN})
 INT8_CACHE_FOLDER = "verbalizer-int8"
 # float16 needs a GPU of compute capability 7.0 or newer, so an older GPU takes the next type
 CUDA_COMPUTE_TYPES = ("int8_float16", "int8_float32", "float32")
+# The model learned to end each output at this length with its language token, so a longer output is cut
+MAX_OUTPUT_TOKENS = 127
+# Without a word before it, the model reads a part such as "1333, 1370," as one number or as ordinals, and it
+# reads "08:15" after "о 06:15, 07:15," in the nominative. So a later part that starts with a number gets the
+# preposition of its number list before it, or else "і", and the output loses that word again.
+_STARTS_WITH_NUMBER = re.compile(r"[+\-−]?\d")
+_CONTEXT = "і"
+_CONTEXT_IN_OUTPUT = re.compile(
+    r"^(?:і|й|о|об|до|з|із|зі|від|по|на|у|в|за|після|близько|біля|понад|між)\s+", re.IGNORECASE
+)
+# the model ends each part as a sentence, so a part that ends at one of these marks gets the mark back
+_CLAUSE_MARKS = ",;:—–"
 
 
 def _compute_type(device: str) -> str:
@@ -80,6 +97,46 @@ def _load_translator(model_dir: Path, cache_dir: Path | None, options: dict[str,
     return ctranslate2.Translator(str(model_dir), **options)
 
 
+def verbalize_in_parts(text: str, translate: Callable[[str], tuple[str, bool]]) -> str:
+    """
+    Verbalize ``text`` whole, and verbalize its two halves instead when the model cut the output.
+
+    ``translate`` returns the words of one model pass and whether the model ended the output itself.
+    """
+    return _verbalize_part(text, translate, before="", last=True)
+
+
+def _verbalize_part(part: str, translate: Callable[[str], tuple[str, bool]], *, before: str, last: bool) -> str:
+    """
+    Verbalize one part of a text. ``before`` is the text before the part.
+
+    A part in the middle of the text keeps the case and the marks of that place.
+    """
+    first = not before
+    context = ""
+    if not first and _STARTS_WITH_NUMBER.match(part):
+        context = (governing_preposition(before) or _CONTEXT) + " "
+    words, complete = translate(context + part)
+    if not complete:
+        halves = halve_for_verbalizer(part)
+        if len(halves) > 1:
+            LOG.debug("The verbalizer cut its output for %r, so it gets the two halves of the text", part)
+            left = _verbalize_part(halves[0], translate, before=before, last=False)
+            right = _verbalize_part(halves[1], translate, before=f"{before} {halves[0]}".lstrip(), last=last)
+            return f"{left} {right}"
+
+        LOG.warning("The verbalizer cut its output for %r, and the text has no place to split", part)
+
+    if context:
+        words = _CONTEXT_IN_OUTPUT.sub("", words, count=1)
+    if not first and not part[:1].isupper():
+        words = words[:1].lower() + words[1:]
+    if not last and words.endswith(".") and not part.endswith("."):
+        words = words[:-1] + (part[-1] if part[-1] in _CLAUSE_MARKS else "")
+
+    return words
+
+
 class Verbalizer:
     """Rewrite one sentence with its numbers and symbols as words."""
 
@@ -99,6 +156,10 @@ class Verbalizer:
 
     def __call__(self, text: str) -> str:
         """Return ``text`` with its numbers and symbols written as words."""
+        return verbalize_in_parts(text, self._translate)
+
+    def _translate(self, text: str) -> tuple[str, bool]:
+        """Return the words of one model pass, and whether the model ended the output before the length limit."""
         pieces = [piece if piece in self._vocab else UNKNOWN_TOKEN for piece in self._sp.encode(text, out_type=str)]
         result = self._translator.translate_batch(
             [[LANGUAGE_TOKEN, *pieces, END_TOKEN]],
@@ -106,9 +167,10 @@ class Verbalizer:
             beam_size=1,
             num_hypotheses=1,
         )
+        hypothesis = result[0].hypotheses[0]
         tokens = [
             token
-            for token in result[0].hypotheses[0][1:]
+            for token in hypothesis[1:]
             if token not in SPECIAL_TOKENS and not (token.startswith("__") and token.endswith("__"))
         ]
-        return self._sp.decode(tokens)
+        return self._sp.decode(tokens).strip(), len(hypothesis) < MAX_OUTPUT_TOKENS
