@@ -508,3 +508,10 @@ def test_key_changes_when_the_exact_int8_matmul_turns_on(monkeypatch):
     monkeypatch.setattr(engine, "_needs_quant_precision", lambda: True)
 
     assert engine._cache_key(MODEL_FILE, "0.0.1") != without
+
+
+def test_cuda_without_the_cuda_provider_in_the_session_is_an_error(env, monkeypatch):
+    monkeypatch.setattr(ort, "InferenceSession", lambda *_args, **_kwargs: FakeSession(["CPUExecutionProvider"]))
+
+    with pytest.raises(RuntimeError, match=r"DEVICE=cuda.*CPUExecutionProvider"):
+        HolosEngine({}, device="cuda", cache_dir=env.cache_dir)

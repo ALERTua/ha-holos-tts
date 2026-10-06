@@ -187,3 +187,19 @@ def test_remove_path_removes_a_file_and_a_folder_with_files(tmp_path):
 
 def test_remove_path_ignores_a_missing_path(tmp_path):
     cache_files.remove_path(tmp_path / "missing")
+
+
+def test_remove_path_removes_a_link_to_a_folder_and_keeps_the_files_of_the_folder(tmp_path):
+    folder = tmp_path / "real"
+    link = tmp_path / "link"
+    folder.mkdir()
+    (folder / "b.bin").write_bytes(OLD)
+    try:
+        link.symlink_to(folder, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("this system does not allow a symbolic link")
+
+    cache_files.remove_path(link)
+
+    assert not link.is_symlink()
+    assert (folder / "b.bin").read_bytes() == OLD

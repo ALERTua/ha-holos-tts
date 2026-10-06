@@ -53,6 +53,16 @@ def test_values_from_env():
     assert settings.voices_dir == Path("/srv/tts/voices")
 
 
+@pytest.mark.parametrize("empty", ["", "  "])
+def test_empty_device_values_give_the_defaults(empty):
+    settings = Settings.from_env({"DEVICE": empty, "VERBALIZER_DEVICE": empty})
+    assert (settings.device, settings.verbalizer_device) == ("cpu", "cpu")
+
+
+def test_empty_verbalizer_device_follows_the_device():
+    assert Settings.from_env({"DEVICE": "cuda", "VERBALIZER_DEVICE": ""}).verbalizer_device == "cuda"
+
+
 def test_verbalizer_device_can_differ_from_device():
     settings = Settings.from_env({"DEVICE": "cuda", "VERBALIZER_DEVICE": "cpu"})
     assert settings.verbalizer_device == "cpu"
