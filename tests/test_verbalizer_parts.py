@@ -7,7 +7,7 @@ import pytest
 
 from holos_tts import verbalizer
 from holos_tts.frontend import verbalize_sentence
-from holos_tts.text import STRESS, halve_for_verbalizer
+from holos_tts.text import STRESS, governing_preposition, halve_for_verbalizer
 from holos_tts.verbalizer import verbalize_in_parts
 
 DIGITS = dict(
@@ -57,6 +57,44 @@ def test_a_later_half_that_starts_with_a_signed_number_also_gets_a_word_before_i
 
     assert verbalize_in_parts("Погода +1, +2, +3, +4.", model) == "Погода +один, +два, +три, +чотири."
     assert model.calls[-1] == "і +2, +3, +4."
+
+
+def test_a_later_half_of_a_number_list_gets_the_preposition_of_the_list_instead_of_i():
+    model = FakeModel(limit=24)
+
+    words = verbalize_in_parts("Рейси о 1, 2, 3, 4, 5, 6.", model)
+
+    assert words == "Рейси о один, два, три, чотири, пʼять, шість."
+    assert model.calls[1:] == ["Рейси о 1, 2,", "о 3, 4, 5, 6."]
+
+
+def test_a_preposition_in_an_earlier_part_still_governs_a_later_quarter():
+    model = FakeModel(limit=12)
+
+    words = verbalize_in_parts("Рейси о 1, 2, 3, 4, 5, 6, 7, 8.", model)
+
+    assert words == "Рейси о один, два, три, чотири, пʼять, шість, сім, вісім."
+    assert model.calls[-2:] == ["о 4, 5,", "о 6, 7, 8."]
+    assert not [call for call in model.calls if call.startswith("і ")]
+
+
+@pytest.mark.parametrize(
+    ("text", "preposition"),
+    [
+        ("Автобуси о 06:15, 06:45,", "о"),
+        ("Температура падала до -3°C, -5°C,", "до"),
+        ("Знижки 10%, 15% і до 20%,", "до"),
+        ("Пороги від 5 до 10, 15,", "до"),
+        ("Зустріч О 7:30, 8:00,", "о"),
+        ("Відпустка з 1 по 5 березня,", None),
+        ("Зустріч о 7:30 у кімнаті 214,", None),
+        ("Рахунок 1, 2,", None),
+        ("Ріо 5, 6,", None),
+        ("", None),
+    ],
+)
+def test_governing_preposition_is_the_last_preposition_before_a_list_of_numbers_only(text, preposition):
+    assert governing_preposition(text) == preposition
 
 
 def test_the_first_half_keeps_the_start_and_the_last_half_keeps_the_end_of_the_text():

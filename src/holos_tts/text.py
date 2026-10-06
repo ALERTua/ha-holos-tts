@@ -55,6 +55,12 @@ _NUMERIC_DATE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b")
 _VERBALIZER_CLAUSE_END = re.compile(r"(?<=[,;])\s+|(?<=[—–])\s+(?=[^\d\s])")
 # a space next to a digit keeps a number with its words, as in "о 15:30" or "22 серпня 2025 року"
 _WORD_GAP = re.compile(r"(?<=[^\d\s])\s+(?=[^\d\s])")
+# a preposition right before a number, as "о" in "о 06:15" or "до" in "до -3°C"
+_PREPOSITION_BEFORE_NUMBER = re.compile(
+    r"(?<![\w'ʼ])(о|об|до|з|із|зі|від|по|на|у|в|за|після|близько|біля|понад|між)\s+(?=[+\-−]?\d)", re.IGNORECASE
+)
+# only numbers, signs, clause marks, °C and % follow the preposition, so the whole list depends on it
+_NUMBER_LIST = re.compile(r"(?:[\d\s,.:;+\-−–]|°C|%)*")
 
 
 def normalize_stress_marks(text: str) -> str:
@@ -155,6 +161,19 @@ def halve_for_verbalizer(text: str) -> list[str]:
             return [text[: gap.start()], text[gap.end() :]]
 
     return [text]
+
+
+def governing_preposition(text: str) -> str | None:
+    """
+    Return the preposition of the number list at the end of ``text``, as "о" for "о 06:15, 06:45,".
+
+    A text that ends with words after its last preposition gives None.
+    """
+    matches = list(_PREPOSITION_BEFORE_NUMBER.finditer(text))
+    if matches and _NUMBER_LIST.fullmatch(text, matches[-1].end()):
+        return matches[-1][1].lower()
+
+    return None
 
 
 def recover_stress(original: str, verbalized: str) -> str:

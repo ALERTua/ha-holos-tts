@@ -22,7 +22,7 @@ from huggingface_hub import hf_hub_download, snapshot_download
 
 from .cache_files import partials
 from .ct2_int8 import convert_to_int8
-from .text import halve_for_verbalizer
+from .text import governing_preposition, halve_for_verbalizer
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -42,11 +42,14 @@ INT8_CACHE_FOLDER = "verbalizer-int8"
 CUDA_COMPUTE_TYPES = ("int8_float16", "int8_float32", "float32")
 # The model learned to end each output at this length with its language token, so a longer output is cut
 MAX_OUTPUT_TOKENS = 127
-# Without a word before it, the model reads a part such as "1333, 1370," as one number or as ordinals,
-# so a later part that starts with a number gets "і" before it, and the output loses that "і" again
+# Without a word before it, the model reads a part such as "1333, 1370," as one number or as ordinals, and it
+# reads "08:15" after "о 06:15, 07:15," in the nominative. So a later part that starts with a number gets the
+# preposition of its number list before it, or else "і", and the output loses that word again.
 _STARTS_WITH_NUMBER = re.compile(r"[+\-−]?\d")
-_CONTEXT = "і "
-_CONTEXT_IN_OUTPUT = re.compile(r"^[ійІЙ]\s+")
+_CONTEXT = "і"
+_CONTEXT_IN_OUTPUT = re.compile(
+    r"^(?:і|й|о|об|до|з|із|зі|від|по|на|у|в|за|після|близько|біля|понад|між)\s+", re.IGNORECASE
+)
 # the model ends each part as a sentence, so a part that ends at one of these marks gets the mark back
 _CLAUSE_MARKS = ",;:—–"
 
@@ -100,19 +103,26 @@ def verbalize_in_parts(text: str, translate: Callable[[str], tuple[str, bool]]) 
 
     ``translate`` returns the words of one model pass and whether the model ended the output itself.
     """
-    return _verbalize_part(text, translate, first=True, last=True)
+    return _verbalize_part(text, translate, before="", last=True)
 
 
-def _verbalize_part(part: str, translate: Callable[[str], tuple[str, bool]], *, first: bool, last: bool) -> str:
-    """Verbalize one part of a text. A part in the middle of the text keeps the case and the marks of that place."""
-    context = _CONTEXT if not first and _STARTS_WITH_NUMBER.match(part) else ""
+def _verbalize_part(part: str, translate: Callable[[str], tuple[str, bool]], *, before: str, last: bool) -> str:
+    """
+    Verbalize one part of a text. ``before`` is the text before the part.
+
+    A part in the middle of the text keeps the case and the marks of that place.
+    """
+    first = not before
+    context = ""
+    if not first and _STARTS_WITH_NUMBER.match(part):
+        context = (governing_preposition(before) or _CONTEXT) + " "
     words, complete = translate(context + part)
     if not complete:
         halves = halve_for_verbalizer(part)
         if len(halves) > 1:
             LOG.debug("The verbalizer cut its output for %r, so it gets the two halves of the text", part)
-            left = _verbalize_part(halves[0], translate, first=first, last=False)
-            right = _verbalize_part(halves[1], translate, first=False, last=last)
+            left = _verbalize_part(halves[0], translate, before=before, last=False)
+            right = _verbalize_part(halves[1], translate, before=f"{before} {halves[0]}".lstrip(), last=last)
             return f"{left} {right}"
 
         LOG.warning("The verbalizer cut its output for %r, and the text has no place to split", part)
