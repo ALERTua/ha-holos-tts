@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Two images from one file:
 #   docker build -t holos-tts .                    CPU image (the default, the last stage)
 #   docker build -t holos-tts:cuda --target cuda . NVIDIA GPU image
@@ -19,7 +20,7 @@ ARG UV_CACHE_DIR
 
 ENV \
     UV_PYTHON_DOWNLOADS=0 \
-    UV_COMPILE_BYTECODE=1 \
+    UV_NO_INSTALLER_METADATA=1 \
     UV_LINK_MODE=copy \
     UV_FROZEN=1 \
     UV_NO_PROGRESS=true \
@@ -40,10 +41,14 @@ RUN apt-get update \
 FROM builder AS deps-cpu
 
 # Only the dependencies: the image copies this venv as its biggest layer, which a change of the code must not touch.
+# A new run of this step, for example after a new uv image, must give the same bytes, so the image keeps the pushed layer.
+# For that, uv writes no installer metadata, and one compileall process writes the bytecode with source hashes, not times.
+# -f also rewrites the bytecode that Python itself writes at its start for the modules of the .pth files.
 RUN --mount=type=cache,target=$UV_CACHE_DIR \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --no-install-project --extra cpu
+    uv sync --no-install-project --extra cpu \
+    && $APP_DIR/.venv/bin/python -W ignore::SyntaxWarning -m compileall -q -f --invalidation-mode unchecked-hash $APP_DIR/.venv/lib
 
 
 # -----------------------------------------------------------------
@@ -71,7 +76,8 @@ FROM builder AS deps-cuda
 RUN --mount=type=cache,target=$UV_CACHE_DIR \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --no-install-project --extra cuda
+    uv sync --no-install-project --extra cuda \
+    && $APP_DIR/.venv/bin/python -W ignore::SyntaxWarning -m compileall -q -f --invalidation-mode unchecked-hash $APP_DIR/.venv/lib
 
 
 # -----------------------------------------------------------------
@@ -159,7 +165,10 @@ ENV \
     NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
-COPY --from=deps-cuda $APP_DIR/.venv $APP_DIR/.venv
+# --link keeps the layer of the packages when the python image changes.
+# pyvenv.cfg names the uv version, so it goes with the rest of the venv into a small separate layer.
+COPY --link --from=deps-cuda $APP_DIR/.venv/lib $APP_DIR/.venv/lib
+COPY --link --from=deps-cuda --exclude=lib $APP_DIR/.venv $APP_DIR/.venv
 COPY --from=builder-cuda $APP_DIR/locked $APP_DIR/locked
 
 # The project goes into its own small layer, so a change of the code does not push the dependencies again.
@@ -177,10 +186,11 @@ ARG PGID
 
 ENV DEVICE=cpu
 
-COPY --from=deps-cpu $APP_DIR/.venv $APP_DIR/.venv
+# The same layers as in the cuda stage.
+COPY --link --from=deps-cpu $APP_DIR/.venv/lib $APP_DIR/.venv/lib
+COPY --link --from=deps-cpu --exclude=lib $APP_DIR/.venv $APP_DIR/.venv
 COPY --from=builder-cpu $APP_DIR/locked $APP_DIR/locked
 
-# The same small layer of the project as in the cuda stage.
 RUN uv pip install --python $APP_DIR/.venv --no-deps --no-cache --offline --compile-bytecode $APP_DIR/locked/ha_holos_tts-*.whl
 
 USER ${PUID}:${PGID}
