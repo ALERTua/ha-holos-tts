@@ -159,7 +159,7 @@ The file [.env.example](.env.example) explains each setting in plain words.
 | `DEVICE` | `cpu` | Where the speech model runs: `cpu` or `cuda`. The CPU image sets `cpu`. The CUDA image sets `cuda`. | Leave it. Choose the image tag that fits your hardware. The CPU image cannot use `cuda`. |
 | `VERBALIZER_DEVICE` | the value of `DEVICE` | Where the verbalizer runs: `cpu` or `cuda`. | In the CUDA image, set `cpu` to keep the verbalizer off the GPU, for example when the GPU has little free memory. |
 | `PRELOAD` | `1` | `1`: at start, the server loads the models one at a time in the background. A request during this load does not wait for the end of the load. It loads the models that its text needs. `0`: the models load at the first request. The model process and the voice list still start with the server. | Keep `1`, so the first request is fast and the downloads of the first start finish early. Set `0` to keep the models out of memory until the first request. |
-| `UNLOAD_AFTER_SECONDS` | `0` | Seconds without requests, after which the server unloads the models. `0` never unloads. The model process stays with its libraries, about 0.44 GB. The next request takes about 3.5 s instead of about 1.3 s. | Set it, for example to `600`, when the host needs the memory for other work. See "Memory and speed". |
+| `UNLOAD_AFTER_SECONDS` | `0` | Seconds without requests, after which the server unloads the models. `0` never unloads. The model process stays with its libraries. In the CPU image it keeps about 0.44 GB, and the next request takes about 3.5 s instead of about 1.3 s. In the CUDA image it keeps about 1.8 GB, and the next request takes about 7.4 s instead of about 0.5 s. | Set it, for example to `600`, when the host needs the memory for other work. See "Memory and speed". |
 | `VERBALIZER_UNLOAD_AFTER_SECONDS` | `0` | Seconds without use, after which the server unloads only the verbalizer. `0` keeps it loaded once it is loaded. When the value is above 0, `PRELOAD` and the warm-up skip the verbalizer. | Set it to give back about 0.5 GB when most of your texts have no digits or symbols. Use a value below `UNLOAD_AFTER_SECONDS`. |
 | *CPU* | | | |
 | `THREADS` | `0` | CPU threads for each model. `0` uses the CPU limit of the container, rounded up. For example, `--cpus 4` gives 4 threads. Without a limit, it uses all cores. The server reads the limit on hosts with cgroup v2. | Set it when the host runs other heavy work, or when you want the server to use fewer cores. |
@@ -227,7 +227,7 @@ To go back to the packages of the image, remove `UV_OVERRIDE` and restart the co
 
 ## Memory and speed
 
-The models run in a separate process. After `UNLOAD_AFTER_SECONDS` without requests, the process unloads the models and gives their memory back to the system. The process stays alive and keeps its libraries, about 0.44 GB. The next request loads the models again.
+The models run in a separate process. After `UNLOAD_AFTER_SECONDS` without requests, the process unloads the models and gives their memory back to the system. The process stays alive and keeps its libraries: about 0.44 GB in the CPU image and about 1.8 GB in the CUDA image. The next request loads the models again.
 
 Some x86 CPUs have no VNNI instructions, for example the Intel Core i5-10400. On such a CPU, the fast int8 matrix multiplication of ONNX Runtime overflows, and the speech becomes unintelligible. The server reads the CPU flags and turns on the exact int8 multiplication (`session.x64quantprecision`) on such a CPU. On the i5-10400, a phrase takes about 14 % more time with it. At the model load, the log tells when the server uses it.
 
@@ -238,14 +238,16 @@ Measured in containers on an Intel Core i9-13900HX and an RTX 4090 Laptop GPU. T
 
 | | CPU image | CUDA image |
 |---|---|---|
-| Image size | about 1.6 GB | 4.9 GB |
-| RAM of the model process with all models loaded | about 1.5 GB | |
-| GPU memory | | |
-| Time to make the speech with all models loaded | 1.3 s | |
-| RAM after `UNLOAD_AFTER_SECONDS` | 0.44 GB | |
-| First request after the unload | 3.5 s | |
-| First request after the start of the container, with no warm-up | 5.7 s | |
-| Request 6 s after the start of a warm-up | 1.4 s | |
+| Image size | about 1.6 GB | about 5.1 GB |
+| RAM of the model process with all models loaded | about 1.5 GB | about 2.1 GB |
+| GPU memory | | about 1.9 GB |
+| Time to make the speech with all models loaded | 1.3 s | 0.5 s |
+| RAM after `UNLOAD_AFTER_SECONDS` | 0.44 GB | about 1.8 GB |
+| First request after the unload | 3.5 s | 7.4 s |
+| First request after the start of the container, with no warm-up | 5.7 s | 10.5 s |
+| Request 6 s after the start of a warm-up | 1.4 s | 3.9 s |
+
+In the CUDA image, the model process uses about 1.1 GB right after the load. It grows to about 2.1 GB with the first request. The GPU memory stays the same, and the verbalizer runs on the GPU. After an unload, about 0.3 GB of GPU memory stays in use.
 
 RAM of each part in the CPU image, from separate measurements:
 
