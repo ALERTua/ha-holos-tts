@@ -23,8 +23,7 @@ SENTENCE_END_MARKS = ".?!:…"
 _SENTENCE_END = re.compile(rf"(?<=[{SENTENCE_END_MARKS}])\s+")
 _LINE_WITHOUT_END = re.compile(r"(\w[^.,!:?…\-\s]?)[ \t]*\n+")
 
-# The verbalizer rewrites numbers, symbols, Latin words and acronyms. Other text goes to the stress model as it is,
-# because the verbalizer is slow and sometimes changes plain words.
+# only text with numbers, symbols, Latin or acronyms goes to the slow verbalizer, which can change plain words
 _NEEDS_VERBALIZER = re.compile(r"[\d%№°$€£₴§&@#=/<>²³¹¼-¾⁰-₟⅐-↋]|[A-Za-z]|\b[А-ЯІЇЄҐ]{2,}\b")
 
 # The HolosTTS ONNX graph makes at most 25 s of audio, and StyleTTS2 takes at most 512 phonemes,
@@ -138,12 +137,7 @@ def needs_verbalization(text: str) -> bool:
 
 
 def recover_stress(original: str, verbalized: str) -> str:
-    """
-    Put the stress marks of ``original`` back into ``verbalized``.
-
-    The verbalizer gets the text without stress marks. Each word that the verbalizer did not change gets its mark
-    back. A word that the verbalizer rewrote, for example a number, stays without a mark.
-    """
+    """Put the stress marks of ``original`` back on each word that the verbalizer did not change."""
     if STRESS not in original:
         return verbalized
 

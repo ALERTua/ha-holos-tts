@@ -35,8 +35,7 @@ CPUINFO = Path("/proc/cpuinfo")
 QUANT_PRECISION_ENTRY = "session.x64quantprecision"
 VNNI_FLAGS = frozenset({"avx_vnni", "avx512_vnni"})
 
-# The symbol table of the HolosTTS checkpoint at MODEL_REVISION. The table has the apostrophe three times.
-# The tokenizer of the checkpoint keeps the last index of a repeated symbol, and so does this one.
+# the checkpoint table repeats the apostrophe, and TOKEN_IDS keeps its last index as the checkpoint does
 VOCAB = (
     '$-\xb4;:,.!?\xa1\xbf—…"\xab\xbb“” ()†/=ABCDEFGHIJKLMNOPQRSTUVWXYZ'
     "abcdefghijklmnopqrstuvwxyz\xe9\xfd\xed\xf3'̯'͡ɑɐɒ\xe6ɓʙβ"

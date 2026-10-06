@@ -30,10 +30,9 @@ def remove_path(path: Path) -> None:
 @contextlib.contextmanager
 def atomic_path(target: Path) -> Iterator[Path]:
     """
-    Yield a temp path next to ``target``. The caller writes a file or fills a folder there.
+    Yield a temp path next to ``target`` (pid in its name) and rename it onto ``target`` on a normal exit.
 
-    A normal exit renames the temp path onto ``target``. An error removes the temp path and raises again.
-    The pid in the name keeps the temp paths of two processes apart.
+    An error removes the temp path and raises again.
     """
     target.parent.mkdir(parents=True, exist_ok=True)
     # a killed process leaves its temp path behind, and the pid of the next run differs

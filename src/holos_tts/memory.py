@@ -1,14 +1,8 @@
 """
-Heap settings of glibc for the worker process.
+Heap settings of glibc for the worker.
 
-A model load converts its weights in big temporary buffers. glibc keeps freed buffers in the heap of the process,
-so after the stress model the verbalizer alone keeps about 1.5 GB instead of 0.5 GB. While a model loads, each big
-buffer must get its own memory mapping, which goes back to the system when the buffer is freed.
-
-The same setting makes torch on the CPU about 70 % slower while a model runs, because each tensor of a request then
-gets a new mapping. So the worker uses the small threshold only while a model loads.
-
-Other systems than Linux with glibc ignore these calls.
+A small mapping threshold while a model loads sends the freed load buffers back to the system. The threshold is small
+only during a load, because torch runs about 70 % slower with it.
 """
 
 from __future__ import annotations

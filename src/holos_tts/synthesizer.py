@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 LOG = logging.getLogger(__name__)
 IDLE_CHECK_SECONDS = 5.0
 STOP_TIMEOUT_SECONDS = 10.0
-# a hung worker must not hold the lock forever; "voices", "load" and "load_part" can download, so they have no limit
+# a hung worker must not hold the lock forever; "voices", "load", "load_part" and "verbalize" may download, so no limit
 REPLY_TIMEOUT_SECONDS = {"synth": 600.0, "status": 10.0, "unload": 10.0}
 WARM_UP_PARTS = MODEL_PARTS
 
