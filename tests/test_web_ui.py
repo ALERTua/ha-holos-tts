@@ -3,6 +3,8 @@ import contextlib
 import json
 import subprocess
 import sys
+import time
+from pathlib import Path
 
 import gradio as gr
 import httpx
@@ -10,9 +12,10 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+from holos_tts import web_ui
 from holos_tts.openai_api import create_app
 from holos_tts.synthesizer import Synthesizer
-from holos_tts.web_ui import load_voices, speak, verbalize
+from holos_tts.web_ui import create_ui, load_voices, speak, verbalize
 from tests import fake_worker
 from tests.conftest import make_settings
 
@@ -110,4 +113,26 @@ def test_verbalize_endpoint_completes_with_the_new_text():
         result = client.get(f"/web/gradio_api/call/verbalize/{call.json()['event_id']}")
         assert "event: complete" in result.text
         assert json.loads(result.text.split("data: ", 1)[1]) == ["Лишилось сім."]
+        asyncio.run(synth.stop())
+
+
+def test_blocks_deletes_the_cached_files_on_a_schedule():
+    synth = Synthesizer(make_settings(preload=False, web_ui=True), chunk_chars=20, worker_target=fake_worker.run)
+    assert create_ui(synth).delete_cache == (web_ui.CACHE_CHECK_SECONDS, web_ui.CACHE_MAX_AGE_SECONDS)
+
+
+def test_speak_wav_file_is_deleted_after_its_age(monkeypatch):
+    monkeypatch.setattr(web_ui, "CACHE_CHECK_SECONDS", 0.2)
+    monkeypatch.setattr(web_ui, "CACHE_MAX_AGE_SECONDS", 0.2)
+    synth = Synthesizer(make_settings(preload=False, web_ui=True), chunk_chars=20, worker_target=fake_worker.run)
+    with TestClient(create_app(synth)) as client:
+        call = client.post("/web/gradio_api/call/speak", json={"data": ["Привіт.", "Speaker_0", 1.0]})
+        result = client.get(f"/web/gradio_api/call/speak/{call.json()['event_id']}")
+        wav = Path(json.loads(result.text.split("data: ", 1)[1])[0]["path"])
+        assert wav.is_file()
+        deadline = time.monotonic() + 10
+        while wav.exists() and time.monotonic() < deadline:
+            time.sleep(0.1)
+
+        assert not wav.exists()
         asyncio.run(synth.stop())
