@@ -2,7 +2,7 @@
 Wyoming TTS server for Home Assistant.
 
 A ``synthesize`` event or a ``synthesize-start``/``-chunk``/``-stop`` stream comes in.
-``audio-start``, ``audio-chunk`` and ``audio-stop`` go out.
+``audio-start``, ``audio-chunk`` and ``audio-stop`` go out, and a stream ends with ``synthesize-stopped``.
 """
 
 from __future__ import annotations
