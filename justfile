@@ -104,7 +104,7 @@ warmup:
     Invoke-RestMethod -Method Post {{url}}/v1/warmup | ConvertTo-Json
 
 # Speak TEXT with VOICE into the folder data. VOICE defaults to DEFAULT_VOICE. Example: just say "Привіт" "Гаська Шиян"
-say $TEXT $VOICE=default_voice $FILE="speech.mp3":
+say $TEXT $VOICE=default_voice $FILE="speech.mp3": _data
     $body = [Text.Encoding]::UTF8.GetBytes((@{ input = $env:TEXT; voice = $env:VOICE } | ConvertTo-Json)); \
     $out = Join-Path '{{data}}' $env:FILE; \
     Invoke-WebRequest -Method Post {{url}}/v1/audio/speech \
