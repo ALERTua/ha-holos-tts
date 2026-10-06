@@ -1,6 +1,6 @@
 [project]
 name = "ha-holos-tts"
-version = "0.1.0"
+version = "1.1.0"
 description = "Ukrainian HolosTTS speech server for Home Assistant: Wyoming and OpenAI-compatible APIs"
 readme = "README.md"
 license = "GPL-3.0-only"
