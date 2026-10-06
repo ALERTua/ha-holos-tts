@@ -60,7 +60,7 @@ jobs:
           - target: cuda
             suffix: "-cuda"
     # builds on buildkit of alert-server when it answers through the tailnet, otherwise on GitHub
-    uses: ALERTua/ci-workflows/.github/workflows/docker-build.yml@1a6d110110cd59cf74be57c9f365934ef1ab759e # feat/v4-tag-convention
+    uses: ALERTua/ci-workflows/.github/workflows/docker-build.yml@v4.0.0
     permissions:
       contents: read # checkout
       packages: write # push of the images to ghcr.io
@@ -77,6 +77,6 @@ jobs:
   report:
     needs: build-and-publish
     if: always()
-    uses: ALERTua/ci-workflows/.github/workflows/pr-report.yml@1a6d110110cd59cf74be57c9f365934ef1ab759e # feat/v4-tag-convention
+    uses: ALERTua/ci-workflows/.github/workflows/pr-report.yml@v4.0.0
     permissions:
       pull-requests: write # comment of the build results on the open pull request of the branch
