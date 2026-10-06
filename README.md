@@ -248,6 +248,17 @@ RAM of each part in the CPU image, from separate measurements:
 | HolosTTS int8 model | about 0.3 GB |
 | Stress model (stanza) | about 0.2 GB |
 
+`docker stats` of a new CPU container with all models loaded and no requests. The Intel Core i9-13900HX (`wslc stats`) and the Intel Core i5-10400 (`docker stats`) gave the same values within 1 %:
+
+| `VERBALIZE` | `WEB_UI` | MEM USAGE | CPU % without requests |
+|---|---|---|---|
+| `1` | `0` | 1.38 GiB | below 1.5 % |
+| `0` | `0` | 0.87 GiB | below 1.5 % |
+| `1` | `1` | 1.45 GiB | 5 to 8 % |
+| `0` | `1` | 0.93 GiB | about 5 % |
+
+The model process grows while the server works. On the i5-10400, after two hours of work with Home Assistant, the model process used 2.08 GB instead of 1.52 GB, and `docker stats` showed 2.01 GiB.
+
 </details>
 
 ### Warm-up
