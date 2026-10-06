@@ -1,5 +1,8 @@
 import asyncio
 import io
+import random
+import re
+import time
 import wave
 
 import httpx
@@ -20,6 +23,7 @@ from wyoming.tts import (
 )
 
 from holos_tts.openai_api import create_app
+from holos_tts.text import SENTENCE_END_MARKS
 from holos_tts.wyoming_server import TtsEventHandler, split_ready_text
 from tests import fake_worker
 
@@ -75,10 +79,36 @@ async def test_voices_and_health(http):
         ("Перше. Друге! Тре", "Перше. Друге!", " Тре"),
         ("Без кінця", "", "Без кінця"),
         ("Кінець.", "", "Кінець."),
+        ("Один.\nДва? Три", "Один.\nДва?", " Три"),
+        ("А… Б: в", "А… Б:", " в"),
+        ("Крапка.", "", "Крапка."),
+        ("", "", ""),
     ],
 )
 def test_split_ready_text(buffer, ready, rest):
     assert split_ready_text(buffer) == (ready, rest)
+
+
+# the regex that split_ready_text used before it became linear
+_OLD_LAST_SENTENCE_END = re.compile(rf"[{SENTENCE_END_MARKS}](?=\s)(?!.*[{SENTENCE_END_MARKS}]\s)", re.DOTALL)
+
+
+def test_split_ready_text_gives_the_results_of_the_old_regex_on_random_texts():
+    rng = random.Random(7)  # noqa: S311
+    alphabet = [*SENTENCE_END_MARKS, "а", "б", ",", " ", " ", "\n", "\t", " ", " ", "\x1f", "-"]
+    for _ in range(20000):
+        buffer = "".join(rng.choices(alphabet, k=rng.randint(0, 14)))
+        match = _OLD_LAST_SENTENCE_END.search(buffer)
+        expected = ("", buffer) if match is None else (buffer[: match.end()], buffer[match.end() :])
+        assert split_ready_text(buffer) == expected, repr(buffer)
+
+
+def test_split_ready_text_of_a_long_buffer_takes_linear_time():
+    # many sentence ends and a long tail without marks took minutes with the old regex
+    head = "Так. " * 15_000
+    started = time.perf_counter()
+    assert split_ready_text(head + "а" * 125_000) == (head[:-1], " " + "а" * 125_000)
+    assert time.perf_counter() - started < 2
 
 
 @pytest.fixture

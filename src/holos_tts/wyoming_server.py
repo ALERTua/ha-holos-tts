@@ -41,8 +41,8 @@ LOG = logging.getLogger(__name__)
 SAMPLE_WIDTH = 2
 CHANNELS = 1
 SAMPLES_PER_CHUNK = 2048
-# In a text stream, everything up to the last end of sentence is ready to speak
-_LAST_SENTENCE_END = re.compile(rf"[{SENTENCE_END_MARKS}](?=\s)(?!.*[{SENTENCE_END_MARKS}]\s)", re.DOTALL)
+# In a text stream, everything up to the last end of sentence is ready to speak; ``search`` is quadratic here
+_LAST_SENTENCE_END = re.compile(rf".*[{SENTENCE_END_MARKS}](?=\s)", re.DOTALL)
 ATTRIBUTION = Attribution(name="patriotyk", url=MODEL_URL)
 
 
@@ -73,7 +73,7 @@ async def build_info(synthesizer: Synthesizer, version: str) -> Info:
 
 def split_ready_text(buffer: str) -> tuple[str, str]:
     """Split a stream buffer into the complete sentences and the unfinished rest."""
-    match = _LAST_SENTENCE_END.search(buffer)
+    match = _LAST_SENTENCE_END.match(buffer)
     if match is None:
         return "", buffer
 
