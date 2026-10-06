@@ -49,16 +49,22 @@ jobs:
           - target: cuda
             suffix: "-cuda"
     # builds on buildkit of alert-server when it answers through the tailnet, otherwise on GitHub
-    uses: ALERTua/ci-workflows/.github/workflows/docker-build.yml@0baaaa65f8bdac76473e6f14a3a74fa3fa635875 # docker-build
+    uses: ALERTua/ci-workflows/.github/workflows/docker-build.yml@f755030d99d1baee98819fdeb34c5c796019f499 # docker-build
     permissions:
       contents: read # checkout
       packages: write # push of the images to ghcr.io
       id-token: write # Tailscale accepts the GitHub OIDC token instead of a key
-      pull-requests: write # comment of the build result on the open pull request of the branch
     with:
-      pr-comment: true
       target: ${{ matrix.target }}
       suffix: ${{ matrix.suffix }}
       # the CUDA libraries do not fit on a GitHub-hosted runner without this
       free-disk-space: ${{ matrix.target == 'cuda' }}
       alert-server: ${{ github.event_name != 'workflow_dispatch' || inputs.alert-server }}
+
+  # one comment with the results of both images on the open pull request of the branch
+  report:
+    needs: build-and-publish
+    if: always()
+    uses: ALERTua/ci-workflows/.github/workflows/pr-report.yml@f755030d99d1baee98819fdeb34c5c796019f499 # docker-build
+    permissions:
+      pull-requests: write # comment of the build results on the open pull request of the branch
