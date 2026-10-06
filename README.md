@@ -124,7 +124,7 @@ The stress model can choose a wrong stress. To set a stress, put `+` after the s
 
 ## Long sentences
 
-The server splits a sentence longer than 150 characters at commas, then at spaces. The model cannot speak a longer piece in one pass.
+The server splits a sentence longer than 150 characters at commas, then at spaces. One pass of the model speaks at most 25 seconds, and a text can become much longer when the numbers become words. For this reason, the server counts the phonemes of each piece and speaks a long piece in several passes. It cuts after a sentence end first, then after a comma, and only then between two words. At a slow speed, a pass takes fewer phonemes.
 
 ## Web UI
 

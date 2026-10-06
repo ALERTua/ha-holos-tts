@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import itertools
 import logging
+import math
 import platform
 import re
 import time
@@ -50,6 +52,17 @@ VOCAB = (
 TOKEN_IDS = {symbol: index for index, symbol in enumerate(VOCAB)}
 PAD_ID = 0
 
+# One pass of the graph returns at most 25 s of audio and drops the rest without an error
+MAX_PASS_SAMPLES = 25 * SAMPLE_RATE
+# The slowest voice speaks about 0.076 s for each token at speed 1.0, so 300 tokens take at most about 23 s
+PASS_TOKENS = 300
+# the cost of a cut: the ear does not notice a cut after a sentence end, but a cut between words breaks a phrase
+_CUT_COSTS = {**dict.fromkeys(".!?…:", 1), **dict.fromkeys(",;—–-", 3)}
+_WORD_CUT_COST = 9
+_SPACES = re.compile(r"\s+")
+# tokenize adds a pad token on both ends of each pass
+_PADS = 2
+
 _NUMBER = re.compile(r"(\d+)")
 # the cache files whose save failed in this process, so that a later load does not try and fail again
 _FAILED_SAVES: set[Path] = set()
@@ -62,6 +75,55 @@ def tokenize(phonemes: str) -> list[int]:
         *(TOKEN_IDS[symbol] for symbol in phonemes if symbol in TOKEN_IDS),
         PAD_ID,
     ]
+
+
+def pass_tokens(speed: float) -> int:
+    """Return the most tokens that one pass speaks at ``speed`` with a margin below the audio cap of the graph."""
+    return max(1, round(PASS_TOKENS * speed))
+
+
+def split_phonemes(phonemes: str, budget: int) -> list[str]:
+    """
+    Split ``phonemes`` at spaces into parts of at most ``budget`` tokens. A longer word stays whole.
+
+    The parts have the lowest sum of the cut costs, and of these the most even sizes.
+    """
+    if len(tokenize(phonemes)) <= budget:
+        return [phonemes]
+
+    phonemes = phonemes.strip()
+    spaces = list(_SPACES.finditer(phonemes))
+    # word i spans starts[i]:ends[i], and a part is a run of neighbor words
+    starts = [0, *(space.end() for space in spaces)]
+    ends = [*(space.start() for space in spaces), len(phonemes)]
+    # the token count of each prefix, without the pads
+    counts = [0, *itertools.accumulate(symbol in TOKEN_IDS for symbol in phonemes)]
+    # best[i]: the cost, the sum of the squared part sizes and the first word of the last part, for words 0..i
+    best: list[tuple[int, int, int]] = []
+    for last in range(len(ends)):
+        options = []
+        for first in range(last, -1, -1):
+            size = counts[ends[last]] - counts[starts[first]] + _PADS
+            if size > budget and first < last:
+                break
+
+            cost, squares = 0, 0
+            if first:
+                cost = best[first - 1][0] + _CUT_COSTS.get(phonemes[ends[first - 1] - 1], _WORD_CUT_COST)
+                squares = best[first - 1][1]
+
+            options.append((cost, squares + size * size, first))
+
+        best.append(min(options))
+
+    parts: list[str] = []
+    last = len(ends) - 1
+    while last >= 0:
+        first = best[last][2]
+        parts.append(phonemes[starts[first] : ends[last]])
+        last = first - 1
+
+    return parts[::-1]
 
 
 def _natural_key(name: str) -> list[int | str]:
@@ -265,7 +327,32 @@ class HolosEngine:
         self._voices = voices
 
     def synthesize(self, phonemes: str, voice: str, speed: float) -> np.ndarray:
-        """Return mono float32 audio for one chunk of phonemes."""
+        """Return mono float32 audio for one chunk of phonemes, in as many passes as the audio cap of the graph asks."""
+        audio = [self._speak(part, voice, speed) for part in split_phonemes(phonemes, pass_tokens(speed))]
+        return audio[0] if len(audio) == 1 else np.concatenate(audio)
+
+    def _speak(self, phonemes: str, voice: str, speed: float) -> np.ndarray:
+        """Run one pass. When the audio reaches the cap of the graph, speak the phonemes again in two parts."""
+        audio = self._run(phonemes, voice, speed)
+        if len(audio) < MAX_PASS_SAMPLES:
+            return audio
+
+        count = len(tokenize(phonemes))
+        # each part may take up to three quarters, so that the cut can fall on a sentence end
+        parts = split_phonemes(phonemes, math.ceil(count * 3 / 4))
+        LOG.warning(
+            "One pass of %d tokens at speed %s reached the audio cap of %d samples, %s",
+            count,
+            speed,
+            MAX_PASS_SAMPLES,
+            "so the server speaks it again in parts" if len(parts) > 1 else "and it has no space, so its end is lost",
+        )
+        if len(parts) == 1:
+            return audio
+
+        return np.concatenate([self._speak(part, voice, speed) for part in parts])
+
+    def _run(self, phonemes: str, voice: str, speed: float) -> np.ndarray:
         tokens = np.array([tokenize(phonemes)], dtype=np.int64)
         audio, lengths = self._session.run(
             None,

@@ -27,8 +27,7 @@ _LINE_WITHOUT_END = re.compile(r"(\w[^.,!:?…\-\s]?)[ \t]*\n+")
 # because the verbalizer is slow and sometimes changes plain words.
 _NEEDS_VERBALIZER = re.compile(r"[\d%№°$€£₴§&@#=/<>²³¹¼-¾⁰-₟⅐-↋]|[A-Za-z]|\b[А-ЯІЇЄҐ]{2,}\b")
 
-# The HolosTTS ONNX graph makes at most 25 s of audio, and StyleTTS2 takes at most 512 phonemes,
-# so a longer sentence is split at commas, then at spaces
+# a longer sentence splits at commas, then at spaces (engine.split_phonemes keeps each model pass under 25 s)
 MAX_SENTENCE_CHARS = 150
 _CLAUSE_END = re.compile(r"(?<=[,;—–])\s+")
 # a space between two digits belongs to a number such as "1 000 000"
