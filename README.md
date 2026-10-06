@@ -227,7 +227,7 @@ To go back to the packages of the image, remove `UV_OVERRIDE` and restart the co
 
 ## Memory and speed
 
-The models run in a separate process. After `UNLOAD_AFTER_SECONDS` without requests, the process unloads the models and gives their memory back to the system. The process stays alive and keeps its libraries, about 0.44 GB. The next request loads the models again.
+The models run in a separate process. After `UNLOAD_AFTER_SECONDS` without requests, the process unloads the models and gives their memory back to the system. The process stays alive and keeps its libraries: about 0.44 GB in the CPU image and about 1.8 GB in the CUDA image. The next request loads the models again.
 
 Some x86 CPUs have no VNNI instructions, for example the Intel Core i5-10400. On such a CPU, the fast int8 matrix multiplication of ONNX Runtime overflows, and the speech becomes unintelligible. The server reads the CPU flags and turns on the exact int8 multiplication (`session.x64quantprecision`) on such a CPU. On the i5-10400, a phrase takes about 14 % more time with it. At the model load, the log tells when the server uses it.
 
