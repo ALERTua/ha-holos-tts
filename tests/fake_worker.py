@@ -113,6 +113,20 @@ def refusing_unload_worker(conn, settings):
         conn.send(result)
 
 
+def voiceless_worker(conn, settings):
+    """A fake worker that answers each command with an error, as a worker whose model cannot load."""
+    while True:
+        try:
+            command, *_args = conn.recv()
+        except EOFError:
+            return
+
+        if command == "exit":
+            return
+
+        conn.send(("error", f"RuntimeError: cannot run {command}"))
+
+
 LOAD_SECONDS = 0.1
 
 
