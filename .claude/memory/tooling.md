@@ -14,5 +14,6 @@ metadata:
 - pre-commit has no pytest hook. CI runs the tests before it builds the images.
 - The coverage gate is 85 %. Coverage does not see the code that runs in the spawned worker process.
 - Pin each GitHub action by its commit SHA, with the version in a comment. Dependabot updates the SHA.
+- Dependabot ignores the major updates of `huggingface-hub`. gradio 6 requires `huggingface-hub<2`, and the update to 2.0.0 made uv downgrade gradio to 5.38.2. Remove the rule when gradio supports `huggingface-hub` 2.
 - The one exception is `ALERTua/ci-workflows`, which the owner trusts. Refer to its workflows by the version tag, for example `@v3.0.0`. Dependabot proposes each newer tag.
 - `docker-image.yml` builds the images through `docker-build.yml` of `ALERTua/ci-workflows`: on buildkit of alert-server when it answers through the tailnet, otherwise on GitHub. A manual run with `alert-server` off builds on GitHub.
