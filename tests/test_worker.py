@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Never
 
 import numpy as np
 import pytest
@@ -52,6 +53,62 @@ def test_idle_verbalizer_is_unloaded(fake_worker):
     fake_worker._verbalizer_used -= 5
     fake_worker.unload_idle_verbalizer()
     assert fake_worker.status()["verbalizer"] is False
+
+
+def test_verbalizer_that_was_used_within_the_timeout_stays_loaded(fake_worker, monkeypatch):
+    freed = []
+    monkeypatch.setattr(worker, "release_free_memory", lambda: freed.append(1))
+    fake_worker.settings = make_settings(verbalizer_unload_after_seconds=60)
+    fake_worker.synthesize(["О 7."], "Гаська Шиян", 1.0)
+    fake_worker._verbalizer_used -= 30
+    fake_worker.unload_idle_verbalizer()
+    assert fake_worker.status()["verbalizer"] is True
+    assert freed == []
+
+
+def test_timeout_zero_never_unloads_the_verbalizer(fake_worker, monkeypatch):
+    freed = []
+    monkeypatch.setattr(worker, "release_free_memory", lambda: freed.append(1))
+    fake_worker.settings = make_settings(verbalizer_unload_after_seconds=0)
+    fake_worker.synthesize(["О 7."], "Гаська Шиян", 1.0)
+    fake_worker._verbalizer_used -= 10_000
+    fake_worker.unload_idle_verbalizer()
+    assert fake_worker.status()["verbalizer"] is True
+    assert freed == []
+
+
+def test_unload_of_an_idle_verbalizer_releases_the_free_memory_only_when_it_unloads(fake_worker, monkeypatch):
+    freed = []
+    monkeypatch.setattr(worker, "release_free_memory", lambda: freed.append(1))
+    fake_worker.settings = make_settings(verbalizer_unload_after_seconds=1)
+    # no verbalizer is loaded, so nothing happens
+    fake_worker.unload_idle_verbalizer()
+    assert freed == []
+    fake_worker.synthesize(["О 7."], "Гаська Шиян", 1.0)
+    fake_worker._verbalizer_used -= 5
+    fake_worker.unload_idle_verbalizer()
+    assert freed == [1]
+
+
+def test_synth_command_releases_the_free_memory_after_the_audio(fake_worker, monkeypatch):
+    calls = []
+    monkeypatch.setattr(worker, "release_free_memory", lambda: calls.append(1))
+    audio = fake_worker.handle(("synth", ["Так."], "Гаська Шиян", 1.0))
+    assert len(audio) == len("Так.")
+    assert calls == [1]
+
+
+def test_empty_phonemes_give_empty_audio_without_the_engine(fake_worker):
+    class RefusingEngine:
+        def synthesize(self, *_) -> Never:
+            msg = "the engine must not run for empty phonemes"
+            raise AssertionError(msg)
+
+    fake_worker._phonemizer = lambda _text: ""
+    fake_worker._engine = RefusingEngine()
+    audio = fake_worker.synthesize(["..."], "Гаська Шиян", 1.0)
+    assert audio.dtype == np.float32
+    assert audio.shape == (0,)
 
 
 def test_model_loading_restores_the_run_threshold_after_an_error(monkeypatch):

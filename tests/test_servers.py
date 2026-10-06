@@ -2,11 +2,13 @@ import asyncio
 import contextlib
 import io
 import json
+import logging
 import random
 import re
 import time
 import wave
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, Never
 
 import httpx
 import numpy as np
@@ -14,6 +16,7 @@ import pytest
 import soundfile as sf
 from wyoming.audio import AudioChunk, AudioStart, AudioStop
 from wyoming.client import AsyncTcpClient
+from wyoming.event import Event
 from wyoming.info import Describe, Info
 from wyoming.server import AsyncTcpServer
 from wyoming.tts import (
@@ -351,3 +354,28 @@ async def test_warmup_answers_at_once_while_the_worker_is_busy(http, synthesizer
 
     assert (first.status_code, first.json()) == (202, {"status": "started"})
     assert (second.status_code, second.json()) == (202, {"status": "running"})
+
+
+@pytest.mark.parametrize("closing", [True, False])
+async def test_wyoming_handler_failure_is_quiet_only_when_the_client_is_gone(synthesizer, caplog, closing):
+    writer = SimpleNamespace(is_closing=lambda: closing)
+    handler = TtsEventHandler(None, writer, synthesizer=synthesizer, version="1.2.3")
+    written = []
+
+    async def fail(_event) -> Never:
+        msg = "client gone"
+        raise ConnectionResetError(msg)
+
+    async def write_event(event) -> None:
+        written.append(event.type)
+
+    handler._handle = fail
+    handler.write_event = write_event
+
+    with caplog.at_level(logging.INFO, logger="holos_tts.wyoming_server"):
+        assert await handler.handle_event(Event(type="synthesize-chunk")) is False
+
+    errors = [record for record in caplog.records if record.levelno >= logging.ERROR]
+    # a client that is gone gets no error event and no traceback in the log
+    assert (len(errors), written) == ((0, []) if closing else (1, ["error"]))
+    assert ("disconnected during synthesize-chunk" in caplog.text) is closing
