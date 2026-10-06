@@ -7,6 +7,7 @@ metadata:
 
 - The Dockerfile has two final targets: `cpu`, the last stage and the default, and `cuda`.
 - `.dockerignore` is a list of the allowed files. Each file that the Dockerfile copies must be on that list. `pyproject.toml` names `README.md` as the readme, so the build needs it. The droast hook reports a missing file as DF077.
+- The final stage copies the venv of the stage `deps-cpu` or `deps-cuda`, which has the dependencies without the project. Then `uv pip install` puts the project wheel from `locked/` into its own small layer. A change of `src` or `README.md` thus does not change the layer of the dependencies (2.5 GB in `cuda`), and a push does not send it again. Do not copy the venv of a stage that also has the project.
 - The CUDA image has two CUDA stacks. ONNX Runtime loads its own CUDA libraries. CTranslate2 needs the CUDA 12 cuBLAS of the `nvidia-cublas-cu12` package, which `LD_LIBRARY_PATH` of the `cuda` stage points to.
 - Inside the container, the servers keep the ports 8000 and 10200. `docker-compose.yml` and the justfile map `HTTP_PORT` and `WYOMING_PORT` to the host.
 - The justfile runs the containers with wslc, the container command of WSL. wslc has no compose. A `-e` value overrides the same variable from `--env-file`.
