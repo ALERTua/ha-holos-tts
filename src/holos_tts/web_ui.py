@@ -19,6 +19,9 @@ if TYPE_CHECKING:
 
 SPEED_STEP = 0.05
 WEB_PATH = "/web"
+# every Speak makes a WAV file in the temp folder of gradio; the page deletes the files older than an hour, hourly
+CACHE_CHECK_SECONDS = 3600
+CACHE_MAX_AGE_SECONDS = 3600
 
 
 async def speak(synthesizer: Synthesizer, text: str, voice: str | None, *, speed: float) -> tuple[int, np.ndarray]:
@@ -71,9 +74,9 @@ def create_ui(synthesizer: Synthesizer) -> gr.Blocks:
     async def handle_load() -> gr.Dropdown:
         return await load_voices(synthesizer)
 
-    with gr.Blocks(title="HolosTTS") as ui:
+    with gr.Blocks(title="HolosTTS", delete_cache=(CACHE_CHECK_SECONDS, CACHE_MAX_AGE_SECONDS)) as ui:
         text = gr.Textbox(label="Text", lines=5, placeholder="Ukrainian text. Mark a stress with + after the vowel.")
-        # the page fills the list when it opens, and a client of the API does not open it, so a name must pass unchecked
+        # API clients skip the page load that fills the list, so the dropdown accepts any name
         voice = gr.Dropdown(label="Voice", choices=[default_voice], value=default_voice, allow_custom_value=True)
         speed = gr.Slider(
             label="Speed",

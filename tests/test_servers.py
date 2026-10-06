@@ -1,7 +1,12 @@
 import asyncio
 import contextlib
 import io
+import json
+import random
+import re
+import time
 import wave
+from typing import Any
 
 import httpx
 import numpy as np
@@ -23,6 +28,7 @@ from wyoming.tts import (
 from holos_tts.constants import MAX_SPEED, MIN_SPEED
 from holos_tts.openai_api import create_app
 from holos_tts.synthesizer import Synthesizer
+from holos_tts.text import SENTENCE_END_MARKS, group_sentences, prepare_sentences
 from holos_tts.wyoming_server import TtsEventHandler, split_ready_text
 from tests import fake_worker
 from tests.conftest import make_settings
@@ -60,6 +66,82 @@ async def test_speech_refuses_empty_input_and_unknown_format(http):
     assert (await http.post("/v1/audio/speech", json={"input": "Так.", "response_format": "aac"})).status_code == 400
 
 
+async def asgi_speech_call(app, text, *, leave_when):
+    """Call the speech endpoint as a server does and return its status. The client leaves when ``leave_when`` is set."""
+    body = json.dumps({"input": text, "response_format": "pcm"}).encode()
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "path": "/v1/audio/speech",
+        "raw_path": b"/v1/audio/speech",
+        "query_string": b"",
+        "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())],
+        "client": ("127.0.0.1", 1),
+        "server": ("test", 80),
+        "scheme": "http",
+        "root_path": "",
+    }
+    sent_body = False
+    messages = []
+
+    async def receive() -> dict[str, Any]:
+        nonlocal sent_body
+        if not sent_body:
+            sent_body = True
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        if leave_when.is_set():
+            return {"type": "http.disconnect"}
+
+        await asyncio.sleep(3600)  # a server waits here until the client leaves; the check of the app cancels it
+        return {}
+
+    async def send(message: dict[str, Any]) -> None:
+        messages.append(message)
+
+    await app(scope, receive, send)
+    return next(message["status"] for message in messages if message["type"] == "http.response.start")
+
+
+def spy_on_chunks(synthesizer, client_left=None):
+    """Return the list of the chunks that go to the worker. The first chunk sets ``client_left``."""
+    sent = []
+    request = synthesizer._request
+
+    async def spy(command: str, *args: Any) -> Any:
+        if command == "synth":
+            sent.append(args[0])
+            if client_left is not None:
+                client_left.set()
+
+        return await request(command, *args)
+
+    synthesizer._request = spy
+    return sent
+
+
+async def test_speech_stops_sending_chunks_to_the_worker_when_the_client_leaves(synthesizer):
+    text = " ".join(["Раз."] * 30)
+    chunks = group_sentences(prepare_sentences(text), synthesizer.chunk_chars)
+    assert len(chunks) > 3
+    client_left = asyncio.Event()
+    sent = spy_on_chunks(synthesizer, client_left)
+    status = await asgi_speech_call(create_app(synthesizer), text, leave_when=client_left)
+    assert status == 499
+    # the client left while the first chunk ran, and that chunk may finish
+    assert sent == chunks[:1]
+
+
+async def test_speech_sends_all_chunks_to_the_worker_while_the_client_stays(synthesizer):
+    text = " ".join(["Раз."] * 30)
+    sent = spy_on_chunks(synthesizer)
+    status = await asgi_speech_call(create_app(synthesizer), text, leave_when=asyncio.Event())
+    assert status == 200
+    assert sent == group_sentences(prepare_sentences(text), synthesizer.chunk_chars)
+
+
 async def test_speech_reports_a_worker_error(http):
     response = await http.post("/v1/audio/speech", json={"input": "FAIL"})
     assert response.status_code == 500
@@ -79,10 +161,36 @@ async def test_voices_and_health(http):
         ("Перше. Друге! Тре", "Перше. Друге!", " Тре"),
         ("Без кінця", "", "Без кінця"),
         ("Кінець.", "", "Кінець."),
+        ("Один.\nДва? Три", "Один.\nДва?", " Три"),
+        ("А… Б: в", "А… Б:", " в"),
+        ("Крапка.", "", "Крапка."),
+        ("", "", ""),
     ],
 )
 def test_split_ready_text(buffer, ready, rest):
     assert split_ready_text(buffer) == (ready, rest)
+
+
+# the regex that split_ready_text used before it became linear
+_OLD_LAST_SENTENCE_END = re.compile(rf"[{SENTENCE_END_MARKS}](?=\s)(?!.*[{SENTENCE_END_MARKS}]\s)", re.DOTALL)
+
+
+def test_split_ready_text_gives_the_results_of_the_old_regex_on_random_texts():
+    rng = random.Random(7)  # noqa: S311
+    alphabet = [*SENTENCE_END_MARKS, "а", "б", ",", " ", " ", "\n", "\t", " ", " ", "\x1f", "-"]
+    for _ in range(20000):
+        buffer = "".join(rng.choices(alphabet, k=rng.randint(0, 14)))
+        match = _OLD_LAST_SENTENCE_END.search(buffer)
+        expected = ("", buffer) if match is None else (buffer[: match.end()], buffer[match.end() :])
+        assert split_ready_text(buffer) == expected, repr(buffer)
+
+
+def test_split_ready_text_of_a_long_buffer_takes_linear_time():
+    # many sentence ends and a long tail without marks took minutes with the old regex
+    head = "Так. " * 15_000
+    started = time.perf_counter()
+    assert split_ready_text(head + "а" * 125_000) == (head[:-1], " " + "а" * 125_000)
+    assert time.perf_counter() - started < 2
 
 
 @pytest.fixture

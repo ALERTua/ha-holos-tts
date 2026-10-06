@@ -37,6 +37,31 @@ async def test_unknown_voice_falls_back_to_the_default_of_the_settings():
         await synth.stop()
 
 
+async def test_unknown_default_voice_is_logged_once_with_the_voice_that_replaces_it(synthesizer, caplog):
+    caplog.set_level(logging.WARNING, logger=synthesizer_module.__name__)
+    assert synthesizer.settings.default_voice not in fake_worker.VOICES
+    assert await synthesizer.resolve_voice(None) == fake_worker.VOICES[0]
+    assert await synthesizer.resolve_voice(None) == fake_worker.VOICES[0]
+    await synthesizer.voices()
+    messages = [record.getMessage() for record in caplog.records]
+    assert len(messages) == 1
+    assert "DEFAULT_VOICE='Speaker_67'" in messages[0]
+    assert repr(fake_worker.VOICES[0]) in messages[0]
+
+
+async def test_known_default_voice_logs_no_warning(caplog):
+    caplog.set_level(logging.WARNING, logger=synthesizer_module.__name__)
+    synth = Synthesizer(
+        make_settings(default_voice=fake_worker.VOICES[1]), chunk_chars=20, worker_target=fake_worker.run
+    )
+    try:
+        await synth.voices()
+    finally:
+        await synth.stop()
+
+    assert caplog.records == []
+
+
 async def test_slow_reader_does_not_block_other_requests(synthesizer):
     chunks = synthesizer.synthesize("Перше довге речення тут. Друге довге речення тут.", None, 1.0)
     try:
@@ -482,7 +507,8 @@ async def test_failed_warm_up_step_is_logged_and_stops_the_warm_up(synthesizer, 
         await synthesizer._warm_up_task
 
     assert synthesizer._warm_up_task.exception() is None
-    assert [record.getMessage() for record in caplog.records] == ["Failed to load the unknown model in advance"]
+    errors = [record.getMessage() for record in caplog.records if record.levelno >= logging.ERROR]
+    assert errors == ["Failed to load the unknown model in advance"]
     # the step after the failed one did not run, so the fake worker has no model
     assert (await synthesizer.status())["engine"] is False
     assert await collect(synthesizer, "Після помилки.")
