@@ -14,7 +14,7 @@ import uvicorn
 from wyoming.server import AsyncTcpServer
 
 from .config import Settings, SettingsError
-from .constants import CHUNK_CHARS, PROGRAM_NAME
+from .constants import CHUNK_CHARS, DISTRIBUTION_NAME, PROGRAM_NAME
 from .openai_api import create_app
 from .synthesizer import Synthesizer
 from .wyoming_server import TtsEventHandler
@@ -35,7 +35,7 @@ class _HttpServer(uvicorn.Server):
 
 def _version() -> str:
     try:
-        return version(PROGRAM_NAME)
+        return version(DISTRIBUTION_NAME)
     except PackageNotFoundError:
         return "0"
 
