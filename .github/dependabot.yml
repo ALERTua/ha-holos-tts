@@ -15,6 +15,10 @@ updates:
     # the same delay as exclude-newer = "1 week" in pyproject.toml, else uv refuses the proposed version
     cooldown:
       default-days: 7
+    ignore:
+      # gradio requires huggingface-hub<2, and the update to 2.x downgrades gradio by a major version
+      - dependency-name: "huggingface-hub"
+        update-types: ["version-update:semver-major"]
   # base images in the Dockerfile
   - package-ecosystem: docker
     directory: "/"
