@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import io
 import json
 import random
@@ -24,10 +25,13 @@ from wyoming.tts import (
     SynthesizeVoice,
 )
 
+from holos_tts.constants import MAX_SPEED, MIN_SPEED
 from holos_tts.openai_api import create_app
+from holos_tts.synthesizer import Synthesizer
 from holos_tts.text import SENTENCE_END_MARKS, group_sentences, prepare_sentences
 from holos_tts.wyoming_server import TtsEventHandler, split_ready_text
 from tests import fake_worker
+from tests.conftest import make_settings
 
 
 @pytest.fixture
@@ -256,10 +260,43 @@ async def test_wyoming_error_event(wyoming):
     assert "bad text" in event.data["text"]
 
 
-async def test_speed_is_limited_to_the_model_range(http):
-    response = await http.post("/v1/audio/speech", json={"input": "Так.", "response_format": "pcm", "speed": 3.5})
+def first_pcm_sample(response):
+    return int(np.frombuffer(response.content, dtype="<i2")[0])
+
+
+@pytest.mark.parametrize(("speed", "model_speed"), [(3.5, MAX_SPEED), (0.25, MIN_SPEED)])
+async def test_speed_is_limited_to_the_model_range(http, speed, model_speed):
+    response = await http.post("/v1/audio/speech", json={"input": "Так.", "response_format": "pcm", "speed": speed})
     # the fake worker returns samples equal to speed / 10
-    assert np.frombuffer(response.content, dtype="<i2")[0] == int(0.2 * 32767)
+    assert first_pcm_sample(response) == pytest.approx(model_speed / 10 * 32767, abs=1)
+
+
+@contextlib.asynccontextmanager
+async def http_client_of(synth):
+    """An HTTP client of the API around ``synth``, which stops the worker at the end."""
+    try:
+        transport = httpx.ASGITransport(app=create_app(synth))
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            yield client
+    finally:
+        await synth.stop()
+
+
+async def test_speech_without_speed_uses_the_default_speed_of_the_settings():
+    synth = Synthesizer(make_settings(preload=False, default_speed=1.5), chunk_chars=20, worker_target=fake_worker.run)
+    async with http_client_of(synth) as client:
+        response = await client.post("/v1/audio/speech", json={"input": "Так.", "response_format": "pcm"})
+
+    assert first_pcm_sample(response) == pytest.approx(0.15 * 32767, abs=1)
+
+
+async def test_voices_of_a_worker_that_cannot_list_them_are_unavailable():
+    synth = Synthesizer(make_settings(preload=False), chunk_chars=20, worker_target=fake_worker.voiceless_worker)
+    async with http_client_of(synth) as client:
+        response = await client.get("/v1/audio/voices")
+
+    assert response.status_code == 503
+    assert "cannot run voices" in response.json()["detail"]
 
 
 async def test_wyoming_scales_loud_audio_down(wyoming):

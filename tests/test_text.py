@@ -150,6 +150,7 @@ def test_needs_verbalization_for_number_symbols(text):
 
 
 def test_split_long_sentence_keeps_a_number_with_spaces_whole():
-    sentence = "слово " * 23 + "1 000 000 гривень"
-    pieces = split_long_sentence(sentence, limit=150)
-    assert any("1 000 000" in piece for piece in pieces)
+    # the words take 143 characters, so a split at each space would cut the number after "1 000"
+    words = ("слово " * 24).strip()
+    pieces = split_long_sentence(f"{words} 1 000 000 гривень", limit=150)
+    assert pieces == [words, "1 000 000 гривень"]

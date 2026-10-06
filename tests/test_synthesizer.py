@@ -255,6 +255,42 @@ async def test_failed_unload_is_not_repeated_and_does_not_stop_the_idle_timer(mo
         await synth.stop()
 
 
+async def test_zero_unload_after_seconds_keeps_the_models_loaded(monkeypatch):
+    monkeypatch.setattr(synthesizer_module, "IDLE_CHECK_SECONDS", CHECK_SECONDS)
+    # 0 is the default of the settings and turns the idle unload off
+    synth = Synthesizer(
+        make_settings(preload=False, unload_after_seconds=0),
+        chunk_chars=20,
+        worker_target=fake_worker.run,
+    )
+    try:
+        await synth.start()
+        assert await collect(synth, "Запит.")
+        await asyncio.sleep(CHECK_SECONDS * 6)
+        assert (await synth.status())["unloads"] == 0
+    finally:
+        await synth.stop()
+
+
+async def test_idle_check_does_not_start_a_stopped_worker(monkeypatch):
+    monkeypatch.setattr(synthesizer_module, "IDLE_CHECK_SECONDS", CHECK_SECONDS)
+    synth = Synthesizer(
+        make_settings(preload=False, unload_after_seconds=1),
+        chunk_chars=20,
+        worker_target=fake_worker.run,
+    )
+    try:
+        await synth.start()
+        with pytest.raises(SynthesisError, match="stopped unexpectedly"):
+            await collect(synth, "CRASH")
+
+        make_idle(synth)
+        await asyncio.sleep(CHECK_SECONDS * 6)
+        assert not synth.worker_running
+    finally:
+        await synth.stop()
+
+
 async def test_stop_stops_the_worker_process(idle_synth):
     assert idle_synth.worker_running
     process = idle_synth._process
@@ -338,6 +374,46 @@ async def test_random_second_cancels_do_not_mix_up_replies(synthesizer, loop_err
     # the rounds above must reach the case under test: a second cancel while the worker still runs the request
     restarts = [record for record in caplog.records if "unknown state" in record.getMessage()]
     assert len(restarts) >= 3
+
+
+# the fake "HANG" request takes 30 s, so an answer within this limit proves that its worker was killed
+HUNG_REQUEST_LIMIT_SECONDS = 10
+
+
+@pytest.fixture
+async def hung_abandoned(synthesizer, monkeypatch):
+    """A synthesizer whose worker hangs in a request that was cancelled twice."""
+    # the next exchange waits this long for the hung worker before it kills it
+    monkeypatch.setattr(synthesizer_module, "STOP_TIMEOUT_SECONDS", 0.1)
+    await synthesizer.voices()
+    await cancel_twice(asyncio.create_task(collect(synthesizer, "HANG.")), REQUEST_PAUSE_SECONDS)
+    assert synthesizer._abandoned is not None
+    return synthesizer
+
+
+async def test_request_after_a_hung_cancelled_request_kills_the_worker_and_gets_its_own_reply(hung_abandoned):
+    chunks = await asyncio.wait_for(collect(hung_abandoned, "Наступний запит.", speed=2.0), HUNG_REQUEST_LIMIT_SECONDS)
+    assert chunks[0][0] == pytest.approx(0.2)
+
+
+async def test_error_of_a_hung_abandoned_exchange_does_not_reach_the_event_loop(hung_abandoned, loop_errors):
+    # the kill of the hung worker makes its exchange fail, and nobody awaits that exchange
+    await asyncio.wait_for(hung_abandoned.stop(), HUNG_REQUEST_LIMIT_SECONDS)
+    gc.collect()
+    assert [context["message"] for context in loop_errors] == []
+
+
+async def test_stop_reads_the_reply_of_an_abandoned_exchange_before_it_closes_the_pipe(synthesizer, monkeypatch):
+    # the stop waits for the slow request only until its reply arrives, so a long limit costs no time
+    monkeypatch.setattr(synthesizer_module, "STOP_TIMEOUT_SECONDS", 5)
+    await synthesizer.voices()
+    await cancel_twice(asyncio.create_task(collect(synthesizer, "SLOW.", speed=1.0)), REQUEST_PAUSE_SECONDS)
+    abandoned = synthesizer._abandoned
+    assert abandoned is not None
+    await synthesizer.stop()
+    status, value = abandoned.result()
+    assert status == "ok"
+    assert value[0] == pytest.approx(0.1)
 
 
 @pytest.fixture
@@ -433,6 +509,8 @@ async def test_failed_warm_up_step_is_logged_and_stops_the_warm_up(synthesizer, 
     assert synthesizer._warm_up_task.exception() is None
     errors = [record.getMessage() for record in caplog.records if record.levelno >= logging.ERROR]
     assert errors == ["Failed to load the unknown model in advance"]
+    # the step after the failed one did not run, so the fake worker has no model
+    assert (await synthesizer.status())["engine"] is False
     assert await collect(synthesizer, "Після помилки.")
 
 
