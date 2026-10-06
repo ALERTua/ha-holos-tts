@@ -5,6 +5,8 @@ SAMPLE_RATE = 24000
 CHUNK_CHARS = 100
 LANGUAGE = "uk"
 PROGRAM_NAME = "holos-tts"
+# the name of the installed package, which differs from the Wyoming program name
+DISTRIBUTION_NAME = "ha-holos-tts"
 MODEL_URL = "https://huggingface.co/patriotyk/HolosTTS"
 # speed range that the models speak well with; 1.0 is the normal speed
 MIN_SPEED = 0.5

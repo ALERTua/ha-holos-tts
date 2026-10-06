@@ -102,9 +102,22 @@ class Synthesizer:
     async def voices(self) -> list[str]:
         """Voice names, with the default voice first. The list stays in memory after the worker stops."""
         if self._voices is None:
-            self._voices = await self._request("voices")
+            voices = await self._request("voices")
+            # two callers may both load the list, and the first one to finish logs the warning
+            if self._voices is None:
+                self._voices = voices
+                self._warn_about_unknown_default_voice(voices)
 
         return self._voices
+
+    def _warn_about_unknown_default_voice(self, voices: list[str]) -> None:
+        if self.settings.default_voice not in voices:
+            LOG.warning(
+                "DEFAULT_VOICE=%r is not a voice of the model, so a request without a voice uses %r. Known voices: %s",
+                self.settings.default_voice,
+                voices[0],
+                ", ".join(voices),
+            )
 
     async def resolve_voice(self, name: str | None) -> str:
         """Return ``name`` when the model has it, else the default voice."""

@@ -1,6 +1,8 @@
+import logging
 from pathlib import Path
 
 import pytest
+import uvicorn.config
 
 from holos_tts import config
 from holos_tts.config import Settings, SettingsError
@@ -113,3 +115,33 @@ def test_explicit_threads_win_over_cpu_limit(cpu_max):
 def test_bad_values_are_refused(env):
     with pytest.raises(SettingsError):
         Settings.from_env(env)
+
+
+@pytest.mark.parametrize(
+    ("raw", "level"),
+    [
+        (None, "INFO"),
+        ("", "INFO"),
+        ("  ", "INFO"),
+        ("debug", "DEBUG"),
+        (" Warning ", "WARNING"),
+        ("ERROR", "ERROR"),
+        ("critical", "CRITICAL"),
+        ("WARN", "WARNING"),
+        ("fatal", "CRITICAL"),
+    ],
+)
+def test_log_level_is_normalized_to_a_name_that_logging_and_uvicorn_accept(raw, level):
+    settings = Settings.from_env({} if raw is None else {"LOG_LEVEL": raw})
+    assert settings.log_level == level
+    assert settings.log_level in logging.getLevelNamesMapping()
+    assert settings.log_level.lower() in uvicorn.config.LOG_LEVELS
+
+
+@pytest.mark.parametrize("raw", ["verbose", "TRACE", "NOTSET", "10", "warning!"])
+def test_unknown_log_level_is_refused_with_the_variable_name_and_the_allowed_values(raw):
+    with pytest.raises(SettingsError) as error:
+        Settings.from_env({"LOG_LEVEL": raw})
+
+    assert f"LOG_LEVEL={raw!r}" in str(error.value)
+    assert "DEBUG, INFO, WARNING, ERROR, CRITICAL" in str(error.value)
