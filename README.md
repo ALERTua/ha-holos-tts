@@ -175,7 +175,7 @@ The file [.env.example](.env.example) explains each setting in plain words.
 | `UV_EXTRA_INDEX_URL` | empty | An extra package index for the versions in the `UV_OVERRIDE` file. The installer uv reads it. | Set it when a section of the override file names an index. |
 | `UV_CACHE_DIR` | `/data/uv_cache` | Folder for the downloads of uv. The Dockerfile sets it. | Do not change it. You can delete the folder when the container does not run. |
 | *Logs* | | | |
-| `LOG_LEVEL` | `INFO` | Amount of log text: `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`. `INFO` logs the text of each request. `DEBUG` also logs the verbalized text and the phonemes. | Set `DEBUG` to find out why a word sounds wrong. Set `WARNING` to keep the request texts out of the log. |
+| `LOG_LEVEL` | `INFO` | Amount of log text: `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`, in any case. `WARN` and `FATAL` also work. Another value stops the start with an error. `INFO` logs the text of each request. `DEBUG` also logs the verbalized text and the phonemes. | Set `DEBUG` to find out why a word sounds wrong. Set `WARNING` to keep the request texts out of the log. |
 
 </details>
 

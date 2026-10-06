@@ -16,6 +16,9 @@ if TYPE_CHECKING:
 TRUE_VALUES = ("1", "true", "yes", "on", "y", "t")
 FALSE_VALUES = ("0", "false", "no", "off", "n", "f", "")
 DEVICES = ("cpu", "cuda")
+# the names that both Python logging and uvicorn accept; the aliases are the other names of logging
+LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+LOG_LEVEL_ALIASES = {"WARN": "WARNING", "FATAL": "CRITICAL"}
 CGROUP_CPU_MAX = Path("/sys/fs/cgroup/cpu.max")
 
 
@@ -97,6 +100,17 @@ def _choice(env: Mapping[str, str], name: str, *, default: str, choices: tuple[s
     return value
 
 
+def _log_level(env: Mapping[str, str], name: str, *, default: str) -> str:
+    raw = env.get(name, "")
+    value = raw.strip().upper() or default
+    value = LOG_LEVEL_ALIASES.get(value, value)
+    if value not in LOG_LEVELS:
+        msg = f"{name}={raw!r} is not one of {', '.join(LOG_LEVELS)}."
+        raise SettingsError(msg)
+
+    return value
+
+
 @dataclass(frozen=True)
 class Settings:
     """Server settings. Each field has the environment variable of the same name in upper case."""
@@ -161,5 +175,5 @@ class Settings:
             ),
             # the libraries start a thread per host core, so a container limit must set the number
             threads=threads or _cpu_limit_threads(),
-            log_level=env.get("LOG_LEVEL", defaults.log_level).strip().upper() or defaults.log_level,
+            log_level=_log_level(env, "LOG_LEVEL", default=defaults.log_level),
         )
