@@ -7,6 +7,10 @@ on:
         description: Build on buildkit of alert-server when it answers. Off builds on GitHub.
         type: boolean
         default: true
+      push:
+        description: Push the images of a run on a branch other than main, with the branch name as the tag.
+        type: boolean
+        default: false
 
   push:
     branches:
@@ -17,6 +21,13 @@ on:
     paths-ignore:
       - "**/*.md"
       - ".github/dependabot.yml"
+
+  # a pull request runs the tests and builds the images without a push
+  pull_request:
+    branches:
+      - "main"
+    paths-ignore:
+      - "**/*.md"
 
 permissions:
   contents: read
@@ -49,7 +60,7 @@ jobs:
           - target: cuda
             suffix: "-cuda"
     # builds on buildkit of alert-server when it answers through the tailnet, otherwise on GitHub
-    uses: ALERTua/ci-workflows/.github/workflows/docker-build.yml@v3.0.0
+    uses: ALERTua/ci-workflows/.github/workflows/docker-build.yml@v4.0.0
     permissions:
       contents: read # checkout
       packages: write # push of the images to ghcr.io
@@ -60,3 +71,4 @@ jobs:
       # the CUDA libraries do not fit on a GitHub-hosted runner without this
       free-disk-space: ${{ matrix.target == 'cuda' }}
       alert-server: ${{ github.event_name != 'workflow_dispatch' || inputs.alert-server }}
+      push: ${{ github.event_name == 'workflow_dispatch' && inputs.push }}

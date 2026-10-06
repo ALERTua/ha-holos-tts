@@ -31,6 +31,14 @@ The first start downloads the models into `./data` and builds a cache from them.
 
 For an NVIDIA GPU, use the image tag `latest-cuda` and uncomment the `deploy` block in `docker-compose.yml`.
 
+Image tags on `ghcr.io/alertua/ha-holos-tts`:
+
+| Tag | What it is |
+|---|---|
+| `latest`, `latest-cuda` | The newest release. |
+| `1`, `1.2`, `1.2.3`, and the same with `-cuda` | A release line or one exact release. `1` gets each new `1.x.y` release. |
+| `edge`, `edge-cuda` | The newest commit of `main`. It can break at any time. |
+
 ## Data folder
 
 The container keeps all its files in `/data`. The file docker-compose.yml mounts `./data` there.
