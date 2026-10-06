@@ -7,6 +7,8 @@ ARG UV_VERSION=
 ARG UV_IMAGE=ghcr.io/astral-sh/uv:${UV_VERSION:+${UV_VERSION}-}python${PYTHON_VERSION}-trixie-slim
 ARG APP_DIR=/app
 ARG UV_CACHE_DIR=/uv-cache
+ARG PUID=1000
+ARG PGID=1000
 
 
 # -----------------------------------------------------------------
@@ -35,18 +37,20 @@ RUN apt-get update \
 
 
 # -----------------------------------------------------------------
-FROM builder AS builder-cpu
+FROM builder AS deps-cpu
 
+# Only the dependencies: the image copies this venv as its biggest layer, which a change of the code must not touch.
 RUN --mount=type=cache,target=$UV_CACHE_DIR \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --no-install-project --extra cpu
 
+
+# -----------------------------------------------------------------
+FROM builder AS builder-cpu
+
 COPY pyproject.toml uv.lock README.md ./
 COPY src src
-
-RUN --mount=type=cache,target=$UV_CACHE_DIR \
-    uv sync --no-editable --extra cpu
 
 # The locked requirements for docker-entrypoint.sh, which installs them into $DATA_DIR/venv when UV_OVERRIDE is set.
 # The runtime image has no git, so the git dependencies and the project go there as wheels.
@@ -61,18 +65,20 @@ RUN --mount=type=cache,target=$UV_CACHE_DIR \
 
 
 # -----------------------------------------------------------------
-FROM builder AS builder-cuda
+FROM builder AS deps-cuda
 
+# The same venv of the dependencies as in deps-cpu, for the cuda extra.
 RUN --mount=type=cache,target=$UV_CACHE_DIR \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --no-install-project --extra cuda
 
+
+# -----------------------------------------------------------------
+FROM builder AS builder-cuda
+
 COPY pyproject.toml uv.lock README.md ./
 COPY src src
-
-RUN --mount=type=cache,target=$UV_CACHE_DIR \
-    uv sync --no-editable --extra cuda
 
 # The same locked requirements as in builder-cpu, for the cuda extra.
 RUN --mount=type=cache,target=$UV_CACHE_DIR \
@@ -88,8 +94,8 @@ RUN --mount=type=cache,target=$UV_CACHE_DIR \
 FROM python:${PYTHON_VERSION}-slim-trixie AS runtime
 
 ARG APP_DIR
-ARG PUID=1000
-ARG PGID=1000
+ARG PUID
+ARG PGID
 
 LABEL maintainer="ALERT <alexey.rubasheff@gmail.com>"
 LABEL org.opencontainers.image.description="Ukrainian HolosTTS speech server for Home Assistant: Wyoming and OpenAI-compatible APIs"
@@ -131,8 +137,6 @@ VOLUME /data
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD ["python", "-m", "holos_tts.healthcheck"]
 
-USER ${PUID}:${PGID}
-
 ENTRYPOINT ["docker-entrypoint.sh"]
 
 CMD ["holos-tts"]
@@ -143,6 +147,8 @@ FROM runtime AS cuda
 
 ARG APP_DIR
 ARG PYTHON_VERSION
+ARG PUID
+ARG PGID
 
 # CTranslate2 of the verbalizer finds the CUDA 12 cuBLAS of the pip packages through this path.
 # ONNX Runtime loads its own CUDA libraries by itself.
@@ -153,16 +159,28 @@ ENV \
     NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
-COPY --from=builder-cuda $APP_DIR/.venv $APP_DIR/.venv
+COPY --from=deps-cuda $APP_DIR/.venv $APP_DIR/.venv
 COPY --from=builder-cuda $APP_DIR/locked $APP_DIR/locked
+
+# The project goes into its own small layer, so a change of the code does not push the dependencies again.
+RUN uv pip install --python $APP_DIR/.venv --no-deps --no-cache --offline --compile-bytecode $APP_DIR/locked/ha_holos_tts-*.whl
+
+USER ${PUID}:${PGID}
 
 
 # -----------------------------------------------------------------
 FROM runtime AS cpu
 
 ARG APP_DIR
+ARG PUID
+ARG PGID
 
 ENV DEVICE=cpu
 
-COPY --from=builder-cpu $APP_DIR/.venv $APP_DIR/.venv
+COPY --from=deps-cpu $APP_DIR/.venv $APP_DIR/.venv
 COPY --from=builder-cpu $APP_DIR/locked $APP_DIR/locked
+
+# The same small layer of the project as in the cuda stage.
+RUN uv pip install --python $APP_DIR/.venv --no-deps --no-cache --offline --compile-bytecode $APP_DIR/locked/ha_holos_tts-*.whl
+
+USER ${PUID}:${PGID}
