@@ -51,6 +51,11 @@ _MONTHS = (
 # The verbalizer leaves a numeric date such as 12.05.2025 as it is, so the server writes the month as a word first
 _NUMERIC_DATE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b")
 
+# a dash before a digit is a range such as "10 – 15", so a part for the verbalizer does not end there
+_VERBALIZER_CLAUSE_END = re.compile(r"(?<=[,;])\s+|(?<=[—–])\s+(?=[^\d\s])")
+# a space next to a digit keeps a number with its words, as in "о 15:30" or "22 серпня 2025 року"
+_WORD_GAP = re.compile(r"(?<=[^\d\s])\s+(?=[^\d\s])")
+
 
 def normalize_stress_marks(text: str) -> str:
     """Turn the user stress marks "+" and "`" into the combining acute accent after the vowel."""
@@ -135,6 +140,21 @@ def group_sentences(sentences: list[str], limit: int) -> list[list[str]]:
 def needs_verbalization(text: str) -> bool:
     """Tell if the text has a number, a symbol, a Latin word or an acronym that the verbalizer must rewrite."""
     return bool(_NEEDS_VERBALIZER.search(strip_stress(text)))
+
+
+def halve_for_verbalizer(text: str) -> list[str]:
+    """
+    Split the text in two at the clause end nearest its middle, or else at the word gap nearest its middle.
+
+    A text without both stays one part.
+    """
+    for pattern in (_VERBALIZER_CLAUSE_END, _WORD_GAP):
+        gaps = [match for match in pattern.finditer(text) if match.end() < len(text)]
+        if gaps:
+            gap = min(gaps, key=lambda match: abs(match.start() + match.end() - len(text)))
+            return [text[: gap.start()], text[gap.end() :]]
+
+    return [text]
 
 
 def recover_stress(original: str, verbalized: str) -> str:

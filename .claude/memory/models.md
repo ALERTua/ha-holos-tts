@@ -12,6 +12,8 @@ metadata:
 - The verbalizer is the CTranslate2 build of M2M100. It needs only sentencepiece and `vocab.json`, not transformers. The output is the same, and transformers costs about 200 MB.
 - Only a sentence with digits, symbols, Latin letters or acronyms goes to the verbalizer (`text.needs_verbalization`). The verbalizer is slow, and it sometimes rewrites plain words, for example "Невеличкі" into "Невеликі".
 - The verbalizer keeps a numeric date such as 15.03.2026 as digits. `text.prenormalize` writes the month as a word first.
+- The verbalizer model ends each output after 127 tokens, its language token included, also in float32. A longer output loses its tail, for example "1, 2, …, 30" stops at "двад". `verbalizer.verbalize_in_parts` then verbalizes the two halves of the text, and a sentence that fits stays as it was.
+- Alone, the verbalizer reads a part such as "1333, 1370," as one number, or "16, 17," as ordinals. For this reason, a later half that starts with a number gets "і" before it.
 - `text.recover_stress` puts the stress marks of the user back after the verbalizer. It cannot do this next to punctuation that the verbalizer changes.
 - The stress model is stanza through `ukrainian-word-stress`. A ByT5 CTranslate2 stressifier needs 2.7 s for each sentence and 1.36 GB more memory, against 0.07 s and 0.57 GB.
 - An unknown voice name gets the default voice and a warning, not HTTP 400. The openai_tts integration of Home Assistant sends the voice "alloy" in a probe.
