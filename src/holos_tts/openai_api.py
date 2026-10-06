@@ -11,7 +11,7 @@ import logging
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 
 LOG = logging.getLogger(__name__)
 MODEL_NAME = "holos"
+# the status that nginx logs for a client that closed the connection first; nobody reads it
+CLIENT_CLOSED_REQUEST = 499
 
 
 class SpeechRequest(BaseModel):
@@ -69,7 +71,7 @@ def create_app(synthesizer: Synthesizer) -> FastAPI:
     )
 
     @app.post("/v1/audio/speech", response_class=Response)
-    async def create_speech(body: SpeechRequest) -> Response:
+    async def create_speech(body: SpeechRequest, request: Request) -> Response:
         if not body.input.strip():
             raise HTTPException(status_code=400, detail="input is empty")
 
@@ -84,7 +86,12 @@ def create_app(synthesizer: Synthesizer) -> FastAPI:
         parts: list[np.ndarray] = []
         try:
             async with contextlib.aclosing(synthesizer.synthesize(body.input, body.voice, speed)) as chunks:
-                parts.extend([chunk async for chunk in chunks])
+                async for chunk in chunks:
+                    parts.append(chunk)
+                    # the chunk in the worker may finish, but the next one must not start for a client that left
+                    if await request.is_disconnected():
+                        LOG.info("The client disconnected, so the synthesis stops")
+                        return Response(status_code=CLIENT_CLOSED_REQUEST)
         except SynthesisError as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
 
