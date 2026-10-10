@@ -1,11 +1,18 @@
 import logging
+import os
+import sys
 from pathlib import Path
+from typing import Never
 
 import pytest
 import uvicorn.config
 
 from holos_tts import config
 from holos_tts.config import Settings, SettingsError
+
+HOST_CPUS = 4
+# read before the autouse fixture replaces it
+REAL_SCHED_GETAFFINITY = config.SCHED_GETAFFINITY
 
 
 @pytest.fixture(autouse=True)
@@ -14,6 +21,25 @@ def cpu_max(tmp_path, monkeypatch):
     path = tmp_path / "cpu.max"
     monkeypatch.setattr(config, "CGROUP_CPU_MAX", path)
     return path
+
+
+@pytest.fixture(autouse=True)
+def affinity(monkeypatch):
+    """The CPUs that the process may run on. The set holds all host CPUs until a test changes it."""
+    cpus = set(range(HOST_CPUS))
+
+    def own_cpus(pid) -> set[int]:
+        assert pid == 0, "pid 0 is the server process, another pid has its own set"
+        return cpus
+
+    monkeypatch.setattr(os, "cpu_count", lambda: HOST_CPUS)
+    monkeypatch.setattr(config, "SCHED_GETAFFINITY", own_cpus)
+    return cpus
+
+
+def _pin(affinity, cpus) -> None:
+    affinity.clear()
+    affinity.update(cpus)
 
 
 def test_defaults():
@@ -107,6 +133,61 @@ def test_threads_without_cpu_limit_file(env):
 def test_explicit_threads_win_over_cpu_limit(cpu_max):
     cpu_max.write_text("400000 100000\n", encoding="ascii")
     assert Settings.from_env({"THREADS": "2"}).threads == 2
+
+
+@pytest.mark.parametrize("env", [{}, {"THREADS": ""}, {"THREADS": "0"}])
+def test_threads_from_cpu_pinning(affinity, env):
+    _pin(affinity, {1, 2, 3})
+    assert Settings.from_env(env).threads == 3
+
+
+@pytest.mark.parametrize(
+    ("content", "cpus", "threads"),
+    [
+        ("400000 100000\n", {1, 2, 3}, 3),
+        ("150000 100000\n", {1, 2, 3}, 2),
+        ("100000 100000\n", {2, 3}, 1),
+        ("max 100000\n", {2, 3}, 2),
+        ("garbage", {0}, 1),
+        ("200000 100000\n", set(range(HOST_CPUS)), 2),
+    ],
+)
+def test_threads_take_the_smaller_of_cpu_limit_and_cpu_pinning(cpu_max, affinity, content, cpus, threads):
+    cpu_max.write_text(content, encoding="ascii")
+    _pin(affinity, cpus)
+    assert Settings.from_env({}).threads == threads
+
+
+def test_explicit_threads_win_over_cpu_pinning(affinity):
+    _pin(affinity, {1})
+    assert Settings.from_env({"THREADS": "2"}).threads == 2
+
+
+def test_threads_from_the_affinity_set_when_host_cpu_count_is_unknown(monkeypatch):
+    monkeypatch.setattr(os, "cpu_count", lambda: None)
+    assert Settings.from_env({}).threads == HOST_CPUS
+
+
+def test_affinity_source_is_the_function_of_the_os():
+    assert REAL_SCHED_GETAFFINITY is getattr(os, "sched_getaffinity", None)
+    assert (REAL_SCHED_GETAFFINITY is None) == (sys.platform != "linux")
+
+
+def test_threads_without_affinity_support_use_only_cpu_limit(cpu_max, monkeypatch):
+    monkeypatch.setattr(config, "SCHED_GETAFFINITY", None)
+    assert Settings.from_env({}).threads == 0
+    cpu_max.write_text("300000 100000\n", encoding="ascii")
+    assert Settings.from_env({}).threads == 3
+
+
+def test_threads_ignore_an_affinity_error(cpu_max, monkeypatch):
+    def refuse(_pid) -> Never:
+        raise OSError
+
+    monkeypatch.setattr(config, "SCHED_GETAFFINITY", refuse)
+    assert Settings.from_env({}).threads == 0
+    cpu_max.write_text("300000 100000\n", encoding="ascii")
+    assert Settings.from_env({}).threads == 3
 
 
 @pytest.mark.parametrize(
