@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from .constants import MAX_SPEED, MIN_SPEED
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
 TRUE_VALUES = ("1", "true", "yes", "on", "y", "t")
 FALSE_VALUES = ("0", "false", "no", "off", "n", "f", "")
@@ -20,6 +20,8 @@ DEVICES = ("cpu", "cuda")
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 LOG_LEVEL_ALIASES = {"WARN": "WARNING", "FATAL": "CRITICAL"}
 CGROUP_CPU_MAX = Path("/sys/fs/cgroup/cpu.max")
+# None on Windows and macOS, where Python cannot read the CPUs that the process may run on
+SCHED_GETAFFINITY: Callable[[int], set[int]] | None = getattr(os, "sched_getaffinity", None)
 
 
 class SettingsError(ValueError):
@@ -89,6 +91,29 @@ def _cpu_limit_threads() -> int:
         return 0
 
     return math.ceil(int(quota) / int(period))
+
+
+def _affinity_threads() -> int:
+    """CPUs of the affinity set (`--cpuset-cpus`), or 0 when the set holds all host CPUs or is unknown."""
+    if SCHED_GETAFFINITY is None:
+        return 0
+
+    try:
+        cpus = len(SCHED_GETAFFINITY(0))
+    except OSError:
+        return 0
+
+    # a set of all host CPUs is no limit, so the libraries keep their own default
+    host = os.cpu_count()
+    if host is not None and cpus >= host:
+        return 0
+
+    return cpus
+
+
+def _auto_threads() -> int:
+    """Threads for THREADS=0: the smaller of the container CPU limit and the affinity set, 0 when neither limits."""
+    return min((n for n in (_cpu_limit_threads(), _affinity_threads()) if n), default=0)
 
 
 def _choice(env: Mapping[str, str], name: str, *, default: str, choices: tuple[str, ...]) -> str:
@@ -173,7 +198,7 @@ class Settings:
                 "VERBALIZER_UNLOAD_AFTER_SECONDS",
                 default=defaults.verbalizer_unload_after_seconds,
             ),
-            # the libraries start a thread per host core, so a container limit must set the number
-            threads=threads or _cpu_limit_threads(),
+            # the libraries start a thread per host core, so a container limit or a CPU pinning must set the number
+            threads=threads or _auto_threads(),
             log_level=_log_level(env, "LOG_LEVEL", default=defaults.log_level),
         )
