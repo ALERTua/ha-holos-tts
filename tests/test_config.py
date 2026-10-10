@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Never
 
@@ -10,6 +11,8 @@ from holos_tts import config
 from holos_tts.config import Settings, SettingsError
 
 HOST_CPUS = 4
+# read before the autouse fixture replaces it
+REAL_SCHED_GETAFFINITY = config.SCHED_GETAFFINITY
 
 
 @pytest.fixture(autouse=True)
@@ -24,8 +27,13 @@ def cpu_max(tmp_path, monkeypatch):
 def affinity(monkeypatch):
     """The CPUs that the process may run on. The set holds all host CPUs until a test changes it."""
     cpus = set(range(HOST_CPUS))
+
+    def own_cpus(pid) -> set[int]:
+        assert pid == 0, "pid 0 is the server process, another pid has its own set"
+        return cpus
+
     monkeypatch.setattr(os, "cpu_count", lambda: HOST_CPUS)
-    monkeypatch.setattr(config, "SCHED_GETAFFINITY", lambda _pid: cpus)
+    monkeypatch.setattr(config, "SCHED_GETAFFINITY", own_cpus)
     return cpus
 
 
@@ -141,7 +149,7 @@ def test_threads_from_cpu_pinning(affinity, env):
         ("100000 100000\n", {2, 3}, 1),
         ("max 100000\n", {2, 3}, 2),
         ("garbage", {0}, 1),
-        ("200000 100000\n", {0, 1, 2, 3}, 2),
+        ("200000 100000\n", set(range(HOST_CPUS)), 2),
     ],
 )
 def test_threads_take_the_smaller_of_cpu_limit_and_cpu_pinning(cpu_max, affinity, content, cpus, threads):
@@ -155,9 +163,14 @@ def test_explicit_threads_win_over_cpu_pinning(affinity):
     assert Settings.from_env({"THREADS": "2"}).threads == 2
 
 
-def test_threads_with_pinning_when_host_cpu_count_is_unknown(affinity, monkeypatch):
+def test_threads_from_the_affinity_set_when_host_cpu_count_is_unknown(monkeypatch):
     monkeypatch.setattr(os, "cpu_count", lambda: None)
     assert Settings.from_env({}).threads == HOST_CPUS
+
+
+def test_affinity_source_is_the_function_of_the_os():
+    assert REAL_SCHED_GETAFFINITY is getattr(os, "sched_getaffinity", None)
+    assert (REAL_SCHED_GETAFFINITY is None) == (sys.platform != "linux")
 
 
 def test_threads_without_affinity_support_use_only_cpu_limit(cpu_max, monkeypatch):

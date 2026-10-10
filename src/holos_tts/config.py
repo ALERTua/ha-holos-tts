@@ -20,7 +20,7 @@ DEVICES = ("cpu", "cuda")
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 LOG_LEVEL_ALIASES = {"WARN": "WARNING", "FATAL": "CRITICAL"}
 CGROUP_CPU_MAX = Path("/sys/fs/cgroup/cpu.max")
-# None on Windows and macOS, where Python cannot read the CPUs that the process may run on
+# None on Windows and macOS, which have no os.sched_getaffinity
 SCHED_GETAFFINITY: Callable[[int], set[int]] | None = getattr(os, "sched_getaffinity", None)
 
 
@@ -94,7 +94,7 @@ def _cpu_limit_threads() -> int:
 
 
 def _affinity_threads() -> int:
-    """CPUs of the affinity set (`--cpuset-cpus`), or 0 when the set holds all host CPUs or is unknown."""
+    """Size of the affinity set (`--cpuset-cpus`), or 0 when it holds all host CPUs or is unknown."""
     if SCHED_GETAFFINITY is None:
         return 0
 
@@ -103,7 +103,7 @@ def _affinity_threads() -> int:
     except OSError:
         return 0
 
-    # a set of all host CPUs is no limit, so the libraries keep their own default
+    # glibc counts the host CPUs (musl counts the set), so a set of all of them is no pinning
     host = os.cpu_count()
     if host is not None and cpus >= host:
         return 0
@@ -198,7 +198,7 @@ class Settings:
                 "VERBALIZER_UNLOAD_AFTER_SECONDS",
                 default=defaults.verbalizer_unload_after_seconds,
             ),
-            # the libraries start a thread per host core, so a container limit or a CPU pinning must set the number
+            # the libraries start a thread per host core, so a container limit or CPU pinning must set the number
             threads=threads or _auto_threads(),
             log_level=_log_level(env, "LOG_LEVEL", default=defaults.log_level),
         )
