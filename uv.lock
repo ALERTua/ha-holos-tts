@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = "==3.12.*"
 resolution-markers = [
     "sys_platform == 'win32'",
@@ -75,7 +75,7 @@ name = "cffi"
 version = "2.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pycparser", marker = "implementation_name != 'PyPy' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
+    { name = "pycparser", marker = "implementation_name != 'PyPy'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9e/ef/008a1939e372c06329a3fce4279c02f328488f3526744906eeec3da7ad5f/cffi-2.1.1.tar.gz", hash = "sha256:dd31f52ea1086513bb9df30f8fcee9b8918323ae067a3d5b78bc826a000712be", size = 530807, upload-time = "2026-08-03T21:21:18.939Z" }
 wheels = [
@@ -187,18 +187,18 @@ wheels = [
 
 [[package]]
 name = "ctranslate2"
-version = "4.8.2"
+version = "4.8.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
     { name = "pyyaml" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/12/97/9c63a51a8c8e13e95ec2aec639460fb0f271b0421e1a365b8aad440385c4/ctranslate2-4.8.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:fedda669421a57f8164568ee86ea265727016988d310fcc2e24ca30e9ec457cd", size = 1271613, upload-time = "2026-08-31T19:37:19.958Z" },
-    { url = "https://files.pythonhosted.org/packages/ca/27/e419389fb6040a8170bb30c3dcd50c29b70638852a264acc5bf804bf8800/ctranslate2-4.8.2-cp312-cp312-macosx_11_0_x86_64.whl", hash = "sha256:5385f15493e7b6f41377da83d0d5afeb8e0f36188260722f3800c3c7121455af", size = 11931717, upload-time = "2026-08-31T19:37:21.897Z" },
-    { url = "https://files.pythonhosted.org/packages/53/46/bfa42114fd583b0ef30b67113486ab72d3ff466e60a824739257bcc533bd/ctranslate2-4.8.2-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:781f835da7fdc4adcc38f9d674dbe9b37eaf3c9aee3b2bc17d684342ff59d549", size = 16894628, upload-time = "2026-08-31T19:37:24.328Z" },
-    { url = "https://files.pythonhosted.org/packages/01/23/d72e70cac2b7c5c832a629c380235b53b20fac8c0921856bcf625b08ba44/ctranslate2-4.8.2-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:554a0b2abf098a11c66ef7930c0a05b3de683a455e8ea3f2e6ab6966aaabc136", size = 39555908, upload-time = "2026-08-31T19:37:27.948Z" },
-    { url = "https://files.pythonhosted.org/packages/4e/23/e3b5322ff7368fcbed181ea4c209149416e7940b5b04971d5ee4084afe1a/ctranslate2-4.8.2-cp312-cp312-win_amd64.whl", hash = "sha256:d94421d565d0de61c032998f737a18942b0f2bef40c0424b1846ec6f67300105", size = 19222069, upload-time = "2026-08-31T19:37:31.531Z" },
+    { url = "https://files.pythonhosted.org/packages/94/b2/a0908acaef272524e084b022775e0e5c5877e6216057246fb30b9957341f/ctranslate2-4.8.3-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:116b7d90fbd704e990ba21f87b484dbdd3b1d9836fb7e642f4939237322bac83", size = 1285912, upload-time = "2026-10-13T05:57:13.373Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/e0/f82cd7926e74f812b1cb88b3616baa8cbdca3a8231ece516f773b61a373b/ctranslate2-4.8.3-cp312-cp312-macosx_11_0_x86_64.whl", hash = "sha256:2bcbc6d49aca405dbb94f06437e8060107e52db9df0235c49a7aa9d99a3996e4", size = 11946098, upload-time = "2026-10-13T05:57:14.708Z" },
+    { url = "https://files.pythonhosted.org/packages/68/99/e08d28c28d45102c589fec3780a4410fe57d9e59a0839ad7f79dbc508cfb/ctranslate2-4.8.3-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:1b9ff80ed67ce7974cb0eafdf7ad79407678b5bea70db934c0d20aaa9db57964", size = 17565485, upload-time = "2026-10-13T05:57:16.904Z" },
+    { url = "https://files.pythonhosted.org/packages/b4/39/438c9236c57443099763789ee009d6d43a65fb58283163fb0d6e6dadacd7/ctranslate2-4.8.3-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7e161eb031fcf2a5d81ce3a1cd8be4954c7df758d96cfaba57aeecc69a0c00ae", size = 40256883, upload-time = "2026-10-13T05:57:19.183Z" },
+    { url = "https://files.pythonhosted.org/packages/db/f8/1aec2aaf0e8a09987085dd2e4a876619fee6026f20ed28a2c2efc6235bec/ctranslate2-4.8.3-cp312-cp312-win_amd64.whl", hash = "sha256:b5daf0758d522a422c76e53eb02ce9f42465a9aba938a86b27249fb5db2571b9", size = 19230360, upload-time = "2026-10-13T05:57:21.518Z" },
 ]
 
 [[package]]
@@ -357,8 +357,8 @@ dependencies = [
     { name = "psutil" },
     { name = "sentencepiece" },
     { name = "soundfile" },
-    { name = "torch", version = "2.14.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
-    { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
+    { name = "torch", version = "2.14.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
     { name = "ukrainian-word-stress" },
     { name = "uvicorn" },
     { name = "wyoming" },
@@ -485,7 +485,7 @@ dependencies = [
     { name = "click" },
     { name = "filelock" },
     { name = "fsspec" },
-    { name = "hf-xet", marker = "platform_machine == 'AMD64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
+    { name = "hf-xet", marker = "platform_machine == 'AMD64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'" },
     { name = "httpx" },
     { name = "packaging" },
     { name = "pyyaml" },
@@ -854,7 +854,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
     { name = "python-dateutil" },
-    { name = "tzdata", marker = "sys_platform == 'emscripten' or sys_platform == 'win32' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
+    { name = "tzdata", marker = "sys_platform == 'emscripten' or sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e2/17/d7b106e05bfa642e8694451e7d3d759c6a241c5386a5d962e4f66c047e06/pandas-3.0.6.tar.gz", hash = "sha256:66b07ef7315a31bfe1089cd3d71a7de781c9dca986762d0b4fe7c0ef17465d10", size = 4667686, upload-time = "2026-09-17T23:23:18.345Z" }
 wheels = [
@@ -1041,7 +1041,7 @@ name = "pytest"
 version = "9.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
     { name = "iniconfig" },
     { name = "packaging" },
     { name = "pluggy" },
@@ -1325,8 +1325,8 @@ dependencies = [
     { name = "platformdirs" },
     { name = "protobuf" },
     { name = "requests" },
-    { name = "torch", version = "2.14.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
-    { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
+    { name = "torch", version = "2.14.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
     { name = "tqdm" },
     { name = "udtools" },
 ]
@@ -1386,13 +1386,13 @@ resolution-markers = [
     "sys_platform == 'darwin'",
 ]
 dependencies = [
-    { name = "filelock", marker = "sys_platform == 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
-    { name = "fsspec", marker = "sys_platform == 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
-    { name = "jinja2", marker = "sys_platform == 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
-    { name = "networkx", marker = "sys_platform == 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
-    { name = "setuptools", marker = "sys_platform == 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
-    { name = "sympy", marker = "sys_platform == 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
-    { name = "typing-extensions", marker = "sys_platform == 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
+    { name = "filelock" },
+    { name = "fsspec" },
+    { name = "jinja2" },
+    { name = "networkx" },
+    { name = "setuptools" },
+    { name = "sympy" },
+    { name = "typing-extensions" },
 ]
 wheels = [
     { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.14.1-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:9cf3082d25560efb1eef921871595227c0cf305abb7761ca45b6b988ef6cdd45", upload-time = "2026-09-30T19:50:32Z" },
@@ -1408,13 +1408,13 @@ resolution-markers = [
     "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "filelock", marker = "sys_platform != 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
-    { name = "fsspec", marker = "sys_platform != 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
-    { name = "jinja2", marker = "sys_platform != 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
-    { name = "networkx", marker = "sys_platform != 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
-    { name = "setuptools", marker = "sys_platform != 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
-    { name = "sympy", marker = "sys_platform != 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
-    { name = "typing-extensions", marker = "sys_platform != 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
+    { name = "filelock" },
+    { name = "fsspec" },
+    { name = "jinja2" },
+    { name = "networkx" },
+    { name = "setuptools" },
+    { name = "sympy" },
+    { name = "typing-extensions" },
 ]
 wheels = [
     { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.14.1%2Bcpu-cp312-cp312-linux_s390x.whl", hash = "sha256:6b06a7f6275c5fdecaf1dbf5546f0820b024a97785575bb99e3d9930d83cd86b", upload-time = "2026-09-30T19:47:30Z" },
@@ -1429,7 +1429,7 @@ name = "tqdm"
 version = "4.70.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0d/ea/b2a5bd54b28a324dae8211928b2d730b6547500342c7e6c6dea08bd0a485/tqdm-4.70.1.tar.gz", hash = "sha256:cefd0eca11b2a37a3aee776544d4f4ae913f02688135b5556b8788dfa474afc4", size = 171846, upload-time = "2026-09-11T07:25:16.601Z" }
 wheels = [
@@ -1467,7 +1467,7 @@ version = "0.27.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
     { name = "rich" },
     { name = "shellingham" },
 ]
@@ -1539,8 +1539,8 @@ source = { git = "https://github.com/egorsmkv/ukrainian-accentor?rev=main#3dff5e
 dependencies = [
     { name = "numpy" },
     { name = "six" },
-    { name = "torch", version = "2.14.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
-    { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin' or (extra == 'extra-12-ha-holos-tts-cpu' and extra == 'extra-12-ha-holos-tts-cuda')" },
+    { name = "torch", version = "2.14.1", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
 ]
 
 [[package]]
