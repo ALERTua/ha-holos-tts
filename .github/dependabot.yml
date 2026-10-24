@@ -14,7 +14,7 @@ updates:
       interval: "weekly"
     # the cooldown applies only to version updates, security updates come at once
     cooldown:
-      default-days: 7
+      default-days: 3
     ignore:
       # gradio requires huggingface-hub<2, and the update to 2.x downgrades gradio by a major version
       - dependency-name: "huggingface-hub"
