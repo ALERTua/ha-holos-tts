@@ -12,7 +12,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    # the same delay as exclude-newer = "1 week" in pyproject.toml, else uv refuses the proposed version
+    # the cooldown applies only to version updates, security updates come at once
     cooldown:
       default-days: 7
     ignore:

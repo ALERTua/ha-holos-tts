@@ -56,8 +56,6 @@ build-backend = "uv_build"
 module-name = "holos_tts"
 
 [tool.uv]
-# take only the releases older than a week, so a broken or a hostile release can be withdrawn first
-exclude-newer = "1 week"
 conflicts = [
     [
         { extra = "cpu" },
