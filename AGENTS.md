@@ -71,7 +71,6 @@ repository root. Run Python only through `uv run`.
 - Do not change production code to make a test pass. Put the difference into the test code.
 - A spawned fake worker must live in `tests/fake_worker.py`. A target in a test module makes the child process import
   the whole test module.
-- Prove a new test with a mutation: break the line that the test protects, and make sure that the test fails.
 
 ## Agent boundaries
 
