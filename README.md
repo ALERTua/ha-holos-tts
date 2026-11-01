@@ -50,18 +50,17 @@ The container keeps all its files in `/data`. The file docker-compose.yml mounts
 | `/data/cache` | Fast copies that the server makes from the downloaded models on the first start. |
 | `/data/voices` | Your extra voices. See "Voices". |
 
-The downloaded models take about 2.5 GB in `huggingface` and `stanza` together. The cache takes about 880 MB in the CPU image. The total is about 3.4 GB.
+The downloaded models take about 2.5 GB in `huggingface` and `stanza` together. The cache takes about 570 MB. The total is about 3.1 GB.
 
 <details>
 <summary>What the cache holds</summary>
 
-The cache holds three parts:
+The cache holds two parts:
 
-- The optimized graph of the speech model, about 306 MB. Only the CPU image makes it.
 - An int8 copy of the verbalizer, about 470 MB.
 - A fast copy of the vectors of the stress model, about 100 MB.
 
-You can delete the folder `/data/cache`. The server makes the copies again when it loads the models.
+You can delete the folder `/data/cache`. The server makes the copies again when it loads the models. Version 1 also kept an optimized graph of the speech model in `/data/cache/onnx`. Version 2 removes that folder at the first start.
 
 On the first start, the first request after the download takes 10 to 12 s, because the server builds the cache. These numbers come from a 32-core CPU. Later starts read the cache.
 
@@ -118,13 +117,15 @@ You can add your own voices:
 
 A `.npy` file with 256 numbers also works.
 
+Version 2 of the server runs the final weights of HolosTTS. The voice vectors of these weights differ from the vectors of version 1, and the names stay the same. A voice file that you made for version 1 gives almost silence in version 2. Clone the voice again in the demo, which uses the final weights.
+
 ## Stress marks
 
 The stress model can choose a wrong stress. To set a stress, put `+` after the stressed vowel, for example `Му+дрого`. The server also accepts `` ` `` before the vowel, for example ``Зустр`іч``, as the older styletts2 API did.
 
 ## Long sentences
 
-The server splits a sentence longer than 150 characters at commas, then at spaces. One pass of the model speaks at most 25 seconds, and a text can become much longer when the numbers become words. For this reason, the server counts the phonemes of each piece and speaks a long piece in several passes. It cuts after a sentence end first, then after a comma, and only then between two words. At a slow speed, a pass takes fewer phonemes.
+The server splits a sentence longer than 150 characters at commas, then at spaces. One pass of the model speaks at most 25 seconds, and a text can become much longer when the numbers become words. For this reason, the model first predicts the length of each piece, and the server speaks a longer piece in several passes. It cuts after a sentence end first, then after a comma, and only then between two words. At a slow speed, a pass takes fewer phonemes.
 
 ## Web UI
 
