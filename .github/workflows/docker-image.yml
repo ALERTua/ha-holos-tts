@@ -40,29 +40,9 @@ jobs:
   # paths-ignore of pull_request looks at the whole diff of the pull request, so a later push of only .md files
   # still runs everything; this job compares the push with the head before it
   changes:
-    runs-on: ubuntu-latest
-    outputs:
-      code: ${{ steps.diff.outputs.code }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - id: diff
-        env:
-          ACTION: ${{ github.event.action }}
-          BEFORE: ${{ github.event.before }}
-          AFTER: ${{ github.event.pull_request.head.sha }}
-        run: |
-          code=true
-          if [ "$ACTION" = "synchronize" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            files=$(git diff --name-only "$BEFORE" "$AFTER")
-            if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -qv '\.md$'; then
-              code=false
-            fi
-          fi
-          echo "code=$code" >> "$GITHUB_OUTPUT"
-          echo "Code changed since the previous push: $code" >> "$GITHUB_STEP_SUMMARY"
+    uses: ALERTua/ci-workflows/.github/workflows/changes.yml@changes-workflow
+    permissions:
+      contents: read # checkout of the history for the diff
 
   test:
     needs: changes
