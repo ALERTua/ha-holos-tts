@@ -37,7 +37,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # paths-ignore of pull_request looks at the whole diff of the pull request, so a later push of only .md files
+  # still runs everything; this job compares the push with the head before it
+  changes:
+    uses: ALERTua/ci-workflows/.github/workflows/changes.yml@v4.2.0
+    permissions:
+      contents: read # checkout of the history for the diff
+
   test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
