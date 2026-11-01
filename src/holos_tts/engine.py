@@ -1,22 +1,25 @@
-"""HolosTTS acoustic model in ONNX Runtime: phonemes and a voice vector in, 24 kHz audio out."""
+"""
+HolosTTS acoustic model in ONNX Runtime: phonemes and a voice vector in, 24 kHz audio out.
+
+The three-stage pass follows the MIT package ``holos-tts-onnx`` of the model author.
+"""
 
 from __future__ import annotations
 
 import contextlib
-import hashlib
+import dataclasses
 import itertools
+import json
 import logging
-import math
 import platform
 import re
-import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from huggingface_hub import hf_hub_download
 
-from .cache_files import atomic_path, remove_path
+from .cache_files import remove_path
 from .constants import CHUNK_CHARS, SAMPLE_RATE
 
 if TYPE_CHECKING:
@@ -28,13 +31,20 @@ VOICE_SIZE = 256
 
 MODEL_REPO = "patriotyk/HolosTTS"
 # The author changed the model architecture between revisions, so the server pins the files it was tested with
-MODEL_REVISION = "16acf36a9df3780786e71bb1a845003f2c56779f"
-ONNX_FILES = {"cpu": "holos_cpu_int8.onnx", "cuda": "holos.onnx"}
-VOICES_FILE = "voices.pt"
-ONNX_CACHE_FOLDER = "onnx"
+MODEL_REVISION = "fdd917a47933f8b2b79b50ee1c25a239b3f9e549"
+BUNDLES = {"cpu": "onnx-int8", "cuda": "onnx"}
+MANIFEST_FILE = "holos_onnx.json"
+MANIFEST_FORMAT = ("holos-onnx", 2)
+STAGES = ("encoder", "prosody", "decoder")
+# both bundles hold the same voices
+VOICES_FILE = "onnx-int8/voices.npz"
+# the optimized graphs of the older single-graph model, which nothing reads now
+OLD_CACHE_FOLDER = "onnx"
 CPUINFO = Path("/proc/cpuinfo")
 # ONNX Runtime: the U8S8 int8 matmul overflows on x86 without VNNI, and this entry selects the exact U8U8 kernels
 QUANT_PRECISION_ENTRY = "session.x64quantprecision"
+# idle intra-op threads that spin keep the cores busy between the runs and make each run slower
+SPINNING_ENTRY = "session.intra_op.allow_spinning"
 VNNI_FLAGS = frozenset({"avx_vnni", "avx512_vnni"})
 
 # the checkpoint table repeats the apostrophe, and TOKEN_IDS keeps its last index as the checkpoint does
@@ -51,10 +61,6 @@ VOCAB = (
 TOKEN_IDS = {symbol: index for index, symbol in enumerate(VOCAB)}
 PAD_ID = 0
 
-# One pass of the graph returns at most 25 s of audio and drops the rest without an error
-MAX_PASS_SAMPLES = 25 * SAMPLE_RATE
-# The slowest voice speaks about 0.076 s for each token at speed 1.0, so 300 tokens take at most about 23 s
-PASS_TOKENS = 300
 # the cost of a cut: the ear does not notice a cut after a sentence end, but a cut between words breaks a phrase
 _CUT_COSTS = {**dict.fromkeys(".!?…:", 1), **dict.fromkeys(",;—–-", 3)}
 _WORD_CUT_COST = 9
@@ -63,8 +69,6 @@ _SPACES = re.compile(r"\s+")
 _PADS = 2
 
 _NUMBER = re.compile(r"(\d+)")
-# the cache files whose save failed in this process, so that a later load does not try and fail again
-_FAILED_SAVES: set[Path] = set()
 
 
 def tokenize(phonemes: str) -> list[int]:
@@ -74,11 +78,6 @@ def tokenize(phonemes: str) -> list[int]:
         *(TOKEN_IDS[symbol] for symbol in phonemes if symbol in TOKEN_IDS),
         PAD_ID,
     ]
-
-
-def pass_tokens(speed: float) -> int:
-    """Return the most tokens that one pass speaks at ``speed`` with a margin below the audio cap of the graph."""
-    return max(1, round(PASS_TOKENS * speed))
 
 
 def split_phonemes(phonemes: str, budget: int) -> list[str]:
@@ -157,12 +156,22 @@ def load_voice_file(path: Path) -> np.ndarray:
     return _to_vector(torch.load(path, map_location="cpu", weights_only=True), str(path))
 
 
+def read_voices_npz(path: Path) -> dict[str, np.ndarray]:
+    """Return the voices of a ``voices.npz`` file: a ``names`` array and a ``values`` array of the same length."""
+    with np.load(path, allow_pickle=False) as archive:
+        names = archive["names"].astype(str).tolist()
+        values = archive["values"]
+
+    if len(names) != len(values):
+        msg = f"{path}: {len(names)} voice names for {len(values)} voices"
+        raise ValueError(msg)
+
+    return {name: _to_vector(value, name) for name, value in zip(names, values, strict=True)}
+
+
 def load_voices(voices_dir: Path) -> dict[str, np.ndarray]:
     """Return the voices of the model and the extra voices from ``voices_dir``. An extra voice wins on a name clash."""
-    import torch  # noqa: PLC0415
-
-    path = hf_hub_download(MODEL_REPO, VOICES_FILE, revision=MODEL_REVISION)
-    voices = {name: _to_vector(value, name) for name, value in torch.load(path, map_location="cpu").items()}
+    voices = read_voices_npz(Path(hf_hub_download(MODEL_REPO, VOICES_FILE, revision=MODEL_REVISION)))
     if voices_dir.is_dir():
         for file in sorted(voices_dir.iterdir()):
             if file.suffix not in (".npy", ".pt"):
@@ -179,7 +188,7 @@ def load_voices(voices_dir: Path) -> dict[str, np.ndarray]:
 
 
 def _cpu_flags() -> str:
-    """Return the CPU feature line that the optimized graph depends on."""
+    """Return the CPU feature line of ``/proc/cpuinfo``."""
     with contextlib.suppress(OSError):
         for line in CPUINFO.read_text(encoding="utf-8", errors="replace").splitlines():
             if line.startswith("flags"):
@@ -189,16 +198,9 @@ def _cpu_flags() -> str:
 
 
 def _needs_quant_precision() -> bool:
-    """Return True on an x86 CPU without VNNI, where the fast int8 matmul of ONNX Runtime gives broken speech."""
+    """Return True on an x86 CPU without VNNI, where the fast int8 matmul of ONNX Runtime can give broken speech."""
     label, _, flags = _cpu_flags().partition(":")
     return label.strip() == "flags" and VNNI_FLAGS.isdisjoint(flags.split())
-
-
-def _cache_key(model_file: str, ort_version: str) -> str:
-    """Return the key of a cached graph: the graph depends on the model, the ONNX Runtime version and the CPU."""
-    # a graph saved without the exact int8 matmul stays broken when a session with it loads the graph
-    parts = (MODEL_REVISION, model_file, ort_version, _cpu_flags(), f"quant-precision={_needs_quant_precision()}")
-    return hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
 
 
 def _session_options(ort: ModuleType, threads: int, *, cpu: bool) -> Any:
@@ -210,83 +212,46 @@ def _session_options(ort: ModuleType, threads: int, *, cpu: bool) -> Any:
     if cpu:
         # the arena keeps the buffers of the longest chunk (about 300 MB), with no speed gain
         options.enable_cpu_mem_arena = False
+        options.add_session_config_entry(SPINNING_ENTRY, "0")
         if _needs_quant_precision():
             options.add_session_config_entry(QUANT_PRECISION_ENTRY, "1")
 
     return options
 
 
-def _remove_temp_files(folder: Path, stem: str) -> None:
-    """Remove the temp files of ``stem`` that a killed process left in ``folder``, also the old ``.tmp`` files."""
-    for pattern in (f"{stem}.*.partial", f"{stem}.*.tmp"):
-        for leftover in folder.glob(pattern):
-            remove_path(leftover)
+def check_manifest(manifest: dict[str, Any]) -> None:
+    """Refuse a bundle that this engine cannot run: another format, another decoder mode or another vocabulary."""
+    found = (manifest.get("format"), manifest.get("format_version"))
+    if found != MANIFEST_FORMAT:
+        msg = f"The model bundle has the format {found}, and the server reads only {MANIFEST_FORMAT}"
+        raise ValueError(msg)
+
+    if manifest.get("decoder_mode") != "exact":
+        msg = f"The model bundle has the decoder mode {manifest.get('decoder_mode')!r}, and the server needs 'exact'"
+        raise ValueError(msg)
+
+    if "".join(manifest.get("vocab", [])) != VOCAB:
+        msg = "The vocabulary of the model bundle differs from the vocabulary of the server"
+        raise ValueError(msg)
 
 
-def _save_optimized_graph(ort: ModuleType, path: str, cached: Path, *, threads: int) -> bool:
-    """
-    Open the original graph and save the optimized graph to ``cached``. Return True when saved.
+@dataclasses.dataclass
+class _Encoded:
+    """The outputs of the encoder and the prosody stage for one pass."""
 
-    After a failed save, this function skips the same ``cached`` until the process ends.
-    """
-    if cached in _FAILED_SAVES:
-        return False
+    voice: np.ndarray
+    acoustic_tokens: np.ndarray
+    frame_to_token: np.ndarray
+    f0: np.ndarray
+    energy: np.ndarray
 
-    stem = cached.name.rsplit(".", 2)[0]
-    try:
-        started = time.monotonic()
-        with atomic_path(cached) as temp:
-            _remove_temp_files(cached.parent, stem)
-            options = _session_options(ort, threads, cpu=True)
-            options.optimized_model_filepath = str(temp)
-            # a saving session keeps about 281 MB extra for its life, so the caller reopens the saved file
-            ort.InferenceSession(path, options, providers=["CPUExecutionProvider"])
-    except Exception:
-        _FAILED_SAVES.add(cached)
-        LOG.warning("Cannot open the original graph %s to save its optimized copy to %s", path, cached, exc_info=True)
-        return False
-    else:
-        LOG.info("Wrote the optimized graph to %s in %.1f s", cached, time.monotonic() - started)
-        # the other keys are graphs of an older ONNX Runtime or of another CPU
-        for stale in cached.parent.glob(f"{stem}.*.onnx"):
-            if stale != cached:
-                remove_path(stale)
-
-        return True
-
-
-def _open_cached_graph(ort: ModuleType, cached: Path, *, threads: int) -> Any:
-    options = _session_options(ort, threads, cpu=True)
-    # the cached graph is optimized already, and a second optimization only slows down the load
-    options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
-    return ort.InferenceSession(str(cached), options, providers=["CPUExecutionProvider"])
-
-
-def _cpu_session(ort: ModuleType, path: str, model_file: str, *, threads: int, cache_dir: Path) -> Any:
-    """Open the CPU session from the cached optimized graph. When there is none, save one and open it."""
-    cached = cache_dir / ONNX_CACHE_FOLDER / f"{Path(model_file).stem}.{_cache_key(model_file, ort.__version__)}.onnx"
-    if cached.is_file():
-        try:
-            return _open_cached_graph(ort, cached, threads=threads)
-        except Exception:
-            LOG.warning("Cannot load the cached graph %s, so the server removes it", cached, exc_info=True)
-            with contextlib.suppress(OSError):
-                cached.unlink(missing_ok=True)
-
-    if _save_optimized_graph(ort, path, cached, threads=threads):
-        try:
-            return _open_cached_graph(ort, cached, threads=threads)
-        except Exception:
-            LOG.warning("Cannot load the saved graph %s, so the server removes it", cached, exc_info=True)
-            with contextlib.suppress(OSError):
-                cached.unlink(missing_ok=True)
-
-    # no usable cache: open the original graph
-    return ort.InferenceSession(path, _session_options(ort, threads, cpu=True), providers=["CPUExecutionProvider"])
+    @property
+    def frames(self) -> int:
+        return int(self.frame_to_token.size)
 
 
 class HolosEngine:
-    """One ONNX Runtime session of the HolosTTS model."""
+    """The three ONNX Runtime sessions of the HolosTTS model: encoder, prosody and decoder."""
 
     sample_rate = SAMPLE_RATE
     chunk_chars = CHUNK_CHARS
@@ -307,58 +272,92 @@ class HolosEngine:
             ort.preload_dlls()
             providers.insert(0, "CUDAExecutionProvider")
 
-        model_file = ONNX_FILES[device]
-        LOG.info("Loading the HolosTTS model %s on %s", model_file, device)
+        if cache_dir is not None and (cache_dir / OLD_CACHE_FOLDER).exists():
+            LOG.info("Removing the optimized graphs of the older model from %s", cache_dir / OLD_CACHE_FOLDER)
+            remove_path(cache_dir / OLD_CACHE_FOLDER)
+
+        bundle = BUNDLES[device]
+        LOG.info("Loading the HolosTTS model %s on %s", bundle, device)
         if device == "cpu" and _needs_quant_precision():
             LOG.info("The CPU has no VNNI, so ONNX Runtime uses the slower exact int8 matrix multiplication")
-        path = hf_hub_download(MODEL_REPO, model_file, revision=MODEL_REVISION)
-        if device == "cpu" and cache_dir is not None:
-            self._session = _cpu_session(ort, path, model_file, threads=threads, cache_dir=cache_dir)
-        else:
-            options = _session_options(ort, threads, cpu=device == "cpu")
-            self._session = ort.InferenceSession(path, options, providers=providers)
 
-        active = self._session.get_providers()
-        if device == "cuda" and "CUDAExecutionProvider" not in active:
-            msg = f"DEVICE=cuda, but ONNX Runtime can use only {active}. Check the GPU of the container."
-            raise RuntimeError(msg)
+        manifest_path = hf_hub_download(MODEL_REPO, f"{bundle}/{MANIFEST_FILE}", revision=MODEL_REVISION)
+        manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+        check_manifest(manifest)
+        self._max_frames = int(manifest["max_frames"])
 
+        options = _session_options(ort, threads, cpu=device == "cpu")
+        sessions = {
+            stage: ort.InferenceSession(
+                hf_hub_download(MODEL_REPO, f"{bundle}/{manifest[stage]}", revision=MODEL_REVISION),
+                options,
+                providers=providers,
+            )
+            for stage in STAGES
+        }
+        for stage, session in sessions.items():
+            active = session.get_providers()
+            if device == "cuda" and "CUDAExecutionProvider" not in active:
+                msg = f"DEVICE=cuda, but ONNX Runtime can use only {active} for the {stage}. Check the container GPU."
+                raise RuntimeError(msg)
+
+        self._encoder = sessions["encoder"]
+        self._prosody = sessions["prosody"]
+        self._decoder = sessions["decoder"]
         self._voices = voices
 
     def synthesize(self, phonemes: str, voice: str, speed: float) -> np.ndarray:
-        """Return mono float32 audio for one chunk of phonemes, in as many passes as the audio cap of the graph asks."""
-        audio = [self._speak(part, voice, speed) for part in split_phonemes(phonemes, pass_tokens(speed))]
-        return audio[0] if len(audio) == 1 else np.concatenate(audio)
+        """Return mono float32 audio for one chunk of phonemes, in as many passes as the frame limit asks."""
+        return self._speak(phonemes, self._voices[voice].reshape(1, VOICE_SIZE), speed)
 
-    def _speak(self, phonemes: str, voice: str, speed: float) -> np.ndarray:
-        """Run one pass. When the audio reaches the cap of the graph, speak the phonemes again in two parts."""
-        audio = self._run(phonemes, voice, speed)
-        if len(audio) < MAX_PASS_SAMPLES:
-            return audio
+    def _speak(self, phonemes: str, voice: np.ndarray, speed: float) -> np.ndarray:
+        """Run one pass. When the encoder predicts more frames than the decoder takes, speak the parts instead."""
+        encoded = self._encode(phonemes, voice, speed)
+        if encoded.frames <= self._max_frames:
+            return self._decode(encoded)
 
         count = len(tokenize(phonemes))
-        # each part may take up to three quarters, so that the cut can fall on a sentence end
-        parts = split_phonemes(phonemes, math.ceil(count * 3 / 4))
-        LOG.warning(
-            "One pass of %d tokens at speed %s reached the audio cap of %d samples, %s",
-            count,
-            speed,
-            MAX_PASS_SAMPLES,
-            "so the server speaks it again in parts" if len(parts) > 1 else "and it has no space, so its end is lost",
-        )
+        parts = split_phonemes(phonemes, max(1, count * self._max_frames // encoded.frames))
         if len(parts) == 1:
-            return audio
+            LOG.warning(
+                "One word of %d tokens is longer than %d frames, so the server cuts it", count, self._max_frames
+            )
+            middle = len(phonemes) // 2
+            parts = [phonemes[:middle], phonemes[middle:]]
 
+        LOG.debug(
+            "A pass of %d frames is above %d, so it is spoken in %d parts", encoded.frames, self._max_frames, len(parts)
+        )
         return np.concatenate([self._speak(part, voice, speed) for part in parts])
 
-    def _run(self, phonemes: str, voice: str, speed: float) -> np.ndarray:
+    def _encode(self, phonemes: str, voice: np.ndarray, speed: float) -> _Encoded:
         tokens = np.array([tokenize(phonemes)], dtype=np.int64)
-        audio, lengths = self._session.run(
-            None,
+        acoustic, prosodic, durations = self._encoder.run(
+            ["acoustic_tokens", "prosodic_tokens", "durations"],
+            {"tokens": tokens, "voice": voice, "speed": np.array([speed], dtype=np.float32)},
+        )
+        durations = np.asarray(durations, dtype=np.int64)
+        # the decoder takes one token index for each audio frame
+        frame_to_token = np.repeat(np.arange(durations.shape[1], dtype=np.int64), durations[0])
+        f0, energy = self._prosody.run(
+            ["f0", "energy"],
+            {"prosodic_tokens": prosodic, "frame_to_token": frame_to_token, "voice": voice},
+        )
+        return _Encoded(voice, np.asarray(acoustic), frame_to_token, np.asarray(f0), np.asarray(energy))
+
+    def _decode(self, encoded: _Encoded) -> np.ndarray:
+        if encoded.frames > self._max_frames:
+            msg = f"The decoder takes at most {self._max_frames} frames, and this pass has {encoded.frames}"
+            raise ValueError(msg)
+
+        audio, lengths = self._decoder.run(
+            ["audio", "audio_lengths"],
             {
-                "tokens": tokens,
-                "voice": self._voices[voice].reshape(1, VOICE_SIZE),
-                "speed": np.array([speed], dtype=np.float32),
+                "acoustic_tokens": encoded.acoustic_tokens,
+                "frame_to_token": encoded.frame_to_token,
+                "f0": encoded.f0,
+                "energy": encoded.energy,
+                "voice": encoded.voice,
             },
         )
         return np.asarray(audio).reshape(-1)[: int(np.asarray(lengths).reshape(-1)[0])].astype(np.float32)

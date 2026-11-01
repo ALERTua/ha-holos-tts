@@ -50,18 +50,17 @@ The container keeps all its files in `/data`. The file docker-compose.yml mounts
 | `/data/cache` | Fast copies that the server makes from the downloaded models on the first start. |
 | `/data/voices` | Your extra voices. See "Voices". |
 
-The downloaded models take about 2.5 GB in `huggingface` and `stanza` together. The cache takes about 880 MB in the CPU image. The total is about 3.4 GB.
+The downloaded models take about 2.5 GB in `huggingface` and `stanza` together. The cache takes about 570 MB. The total is about 3.1 GB.
 
 <details>
 <summary>What the cache holds</summary>
 
-The cache holds three parts:
+The cache holds two parts:
 
-- The optimized graph of the speech model, about 306 MB. Only the CPU image makes it.
 - An int8 copy of the verbalizer, about 470 MB.
 - A fast copy of the vectors of the stress model, about 100 MB.
 
-You can delete the folder `/data/cache`. The server makes the copies again when it loads the models.
+You can delete the folder `/data/cache`. The server makes the copies again when it loads the models. Version 1 also kept an optimized graph of the speech model in `/data/cache/onnx`. Version 2 removes that folder at the first start.
 
 On the first start, the first request after the download takes 10 to 12 s, because the server builds the cache. These numbers come from a 32-core CPU. Later starts read the cache.
 
@@ -118,13 +117,15 @@ You can add your own voices:
 
 A `.npy` file with 256 numbers also works.
 
+Version 2 of the server runs the final weights of HolosTTS. The voice vectors of these weights differ from the vectors of version 1, and the names stay the same. A voice file that you made for version 1 gives almost silence in version 2. Clone the voice again in the demo, which uses the final weights.
+
 ## Stress marks
 
 The stress model can choose a wrong stress. To set a stress, put `+` after the stressed vowel, for example `Му+дрого`. The server also accepts `` ` `` before the vowel, for example ``Зустр`іч``, as the older styletts2 API did.
 
 ## Long sentences
 
-The server splits a sentence longer than 150 characters at commas, then at spaces. One pass of the model speaks at most 25 seconds, and a text can become much longer when the numbers become words. For this reason, the server counts the phonemes of each piece and speaks a long piece in several passes. It cuts after a sentence end first, then after a comma, and only then between two words. At a slow speed, a pass takes fewer phonemes.
+The server splits a sentence longer than 150 characters at commas, then at spaces. One pass of the model speaks at most 25 seconds, and a text can become much longer when the numbers become words. For this reason, the model first predicts the length of each piece, and the server speaks a longer piece in several passes. It cuts after a sentence end first, then after a comma, and only then between two words. At a slow speed, a pass takes fewer phonemes.
 
 ## Web UI
 
@@ -153,7 +154,7 @@ The file [.env.example](.env.example) explains each setting in plain words.
 | `WEB_UI` | `0` | `1` adds a web page at `/web/` on the port of the API. See "Web UI". | Set `1` to try the voices and the speed in a browser. The page has no password. |
 | *Voice and speed* | | | |
 | `DEFAULT_VOICE` | `Speaker_67` | Voice for requests without a voice, and for unknown voice names. It must be a name from `GET /v1/audio/voices`. | Change it to use another voice in the Wyoming integration, or with clients that send a name such as "alloy". |
-| `DEFAULT_SPEED` | `1.0` | Speed of the Wyoming speech, and of OpenAI requests without a speed. The range is `0.5` to `2.0`. A value outside the range stops the server. | Change it when the speech is too fast or too slow. The Wyoming protocol has no speed field. |
+| `DEFAULT_SPEED` | `1.0` | Speed of the Wyoming speech, and of OpenAI requests without a speed. The range is `0.7` to `1.3`, the same as in the HolosTTS demo. A value outside the range stops the server. | Change it when the speech is too fast or too slow. The Wyoming protocol has no speed field. |
 | `VERBALIZE` | `1` | `1` writes numbers, dates, units and acronyms as words before the speech. `0` turns the verbalizer off. `AUTO_USE_VERBALIZER` is the old name. The server reads it when `VERBALIZE` is not set. | Set `0` only when your texts have no digits or symbols. Then the server does not download the verbalizer (1.9 GB) and saves about 0.5 GB of memory. |
 | *Models and memory* | | | |
 | `DEVICE` | `cpu` | Where the speech model runs: `cpu` or `cuda`. The CPU image sets `cpu`. The CUDA image sets `cuda`. | Leave it. Choose the image tag that fits your hardware. The CPU image cannot use `cuda`. |
@@ -229,7 +230,7 @@ To go back to the packages of the image, remove `UV_OVERRIDE` and restart the co
 
 The models run in a separate process. After `UNLOAD_AFTER_SECONDS` without requests, the process unloads the models and gives their memory back to the system. The process stays alive and keeps its libraries: about 0.44 GB in the CPU image and about 1.8 GB in the CUDA image. The next request loads the models again.
 
-Some x86 CPUs have no VNNI instructions, for example the Intel Core i5-10400. On such a CPU, the fast int8 matrix multiplication of ONNX Runtime overflows, and the speech becomes unintelligible. The server reads the CPU flags and turns on the exact int8 multiplication (`session.x64quantprecision`) on such a CPU. On the i5-10400, a phrase takes about 14 % more time with it. At the model load, the log tells when the server uses it.
+Some x86 CPUs have no VNNI instructions, for example the Intel Core i5-10400. On such a CPU, the fast int8 matrix multiplication of ONNX Runtime overflows. With the model of version 1 the speech became unintelligible, and with the model of version 2 the speech changes a little. The server reads the CPU flags and turns on the exact int8 multiplication (`session.x64quantprecision`) on such a CPU. On the i5-10400, a phrase takes about 8 % more time with it. At the model load, the log tells when the server uses it.
 
 <details>
 <summary>Measured memory and speed</summary>
@@ -298,7 +299,7 @@ With the default `0`, the verbalizer stays loaded once it is loaded. With `PRELO
 |---|---|
 | `input` | The text. |
 | `voice` | A name from `GET /v1/audio/voices`. An unknown name uses the default voice. |
-| `speed` | `1.0` is the normal speed. The server accepts `0.25` to `4.0`. It raises a value below `0.5` to `0.5`, and it lowers a value above `2.0` to `2.0`. |
+| `speed` | `1.0` is the normal speed. The server accepts `0.25` to `4.0`. It raises a value below `0.7` to `0.7`, and it lowers a value above `1.3` to `1.3`. |
 | `response_format` | `mp3` (default), `wav`, `flac`, `opus` or `pcm`. `pcm` is raw 16-bit mono audio at 24 kHz. |
 | `model` | The server accepts any name. |
 

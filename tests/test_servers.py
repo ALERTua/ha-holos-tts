@@ -286,11 +286,11 @@ async def http_client_of(synth):
 
 
 async def test_speech_without_speed_uses_the_default_speed_of_the_settings():
-    synth = Synthesizer(make_settings(preload=False, default_speed=1.5), chunk_chars=20, worker_target=fake_worker.run)
+    synth = Synthesizer(make_settings(preload=False, default_speed=1.2), chunk_chars=20, worker_target=fake_worker.run)
     async with http_client_of(synth) as client:
         response = await client.post("/v1/audio/speech", json={"input": "Так.", "response_format": "pcm"})
 
-    assert first_pcm_sample(response) == pytest.approx(0.15 * 32767, abs=1)
+    assert first_pcm_sample(response) == pytest.approx(0.12 * 32767, abs=1)
 
 
 async def test_voices_of_a_worker_that_cannot_list_them_are_unavailable():
