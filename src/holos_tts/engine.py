@@ -35,6 +35,8 @@ ONNX_CACHE_FOLDER = "onnx"
 CPUINFO = Path("/proc/cpuinfo")
 # ONNX Runtime: the U8S8 int8 matmul overflows on x86 without VNNI, and this entry selects the exact U8U8 kernels
 QUANT_PRECISION_ENTRY = "session.x64quantprecision"
+# idle intra-op threads that spin keep the cores busy between the runs and make each run slower
+SPINNING_ENTRY = "session.intra_op.allow_spinning"
 VNNI_FLAGS = frozenset({"avx_vnni", "avx512_vnni"})
 
 # the checkpoint table repeats the apostrophe, and TOKEN_IDS keeps its last index as the checkpoint does
@@ -210,6 +212,7 @@ def _session_options(ort: ModuleType, threads: int, *, cpu: bool) -> Any:
     if cpu:
         # the arena keeps the buffers of the longest chunk (about 300 MB), with no speed gain
         options.enable_cpu_mem_arena = False
+        options.add_session_config_entry(SPINNING_ENTRY, "0")
         if _needs_quant_precision():
             options.add_session_config_entry(QUANT_PRECISION_ENTRY, "1")
 

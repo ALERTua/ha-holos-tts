@@ -25,6 +25,7 @@ class Call:
     threads: int
     arena: bool
     precision: str | None
+    spinning: str | None
 
 
 def _config_entry(options: ort.SessionOptions, key: str) -> str | None:
@@ -63,6 +64,7 @@ class FakeInferenceSession:
                 options.intra_op_num_threads,
                 options.enable_cpu_mem_arena,
                 _config_entry(options, engine.QUANT_PRECISION_ENTRY),
+                _config_entry(options, engine.SPINNING_ENTRY),
             )
         )
         if path in self.unloadable or path in self.unloadable_once:
@@ -374,6 +376,41 @@ def test_cuda_keeps_the_memory_arena(env):
     HolosEngine({}, device="cuda", cache_dir=env.cache_dir)
 
     assert [call.arena for call in env.sessions.calls] == [True]
+
+
+def test_cpu_miss_turns_the_thread_spinning_off(env):
+    HolosEngine({}, cache_dir=env.cache_dir)
+
+    assert [call.spinning for call in env.sessions.calls] == ["0", "0"]
+
+
+def test_cpu_hit_turns_the_thread_spinning_off(env):
+    env.onnx_dir.mkdir(parents=True)
+    env.cached.write_bytes(OPTIMIZED)
+
+    HolosEngine({}, cache_dir=env.cache_dir)
+
+    assert [call.spinning for call in env.sessions.calls] == ["0"]
+
+
+def test_cpu_fallback_after_a_failed_save_turns_the_thread_spinning_off(env):
+    env.sessions.unsavable = True
+
+    HolosEngine({}, cache_dir=env.cache_dir)
+
+    assert [(bool(call.save_to), call.spinning) for call in env.sessions.calls] == [(True, "0"), (False, "0")]
+
+
+def test_cpu_without_a_cache_dir_turns_the_thread_spinning_off(env):
+    HolosEngine({})
+
+    assert [call.spinning for call in env.sessions.calls] == ["0"]
+
+
+def test_cuda_keeps_the_thread_spinning(env):
+    HolosEngine({}, device="cuda", cache_dir=env.cache_dir)
+
+    assert [call.spinning for call in env.sessions.calls] == [None]
 
 
 def test_key_changes_with_the_onnx_runtime_version(env, monkeypatch):
