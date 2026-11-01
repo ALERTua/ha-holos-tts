@@ -11,6 +11,7 @@ metadata:
 - A move of the pin can change the voice vectors. The final weights (fdd917a) retrained all 27 vectors under the same names, and an old vector gives near silence in the new model. A user then must clone the voice again.
 - `engine.VOCAB` has U+0027 four times. The tokenizer of the checkpoint keeps the last index of a repeated symbol, and `engine.TOKEN_IDS` does the same.
 - The decoder takes at most `max_frames` of the manifest (1000 frames, 25 s) and fails above it. The encoder takes at least 2069 tokens and returns the duration of each token, about 2.27 frames for each token at speed 1.0. The character limits of `text` do not keep a chunk below the limit, because the verbalizer can make a text three times longer. `HolosEngine._speak` encodes a chunk, and when its frames are above the limit, it splits the phonemes with `engine.split_phonemes` in proportion and encodes each part again.
+- At speed 2.0 the old and the new weights both give unintelligible speech by STT. The server allows 0.7 to 1.3, the range of the HolosTTS demo.
 - The verbalizer is the CTranslate2 build of M2M100. It needs only sentencepiece and `vocab.json`, not transformers. The output is the same, and transformers costs about 200 MB.
 - Only a sentence with digits, symbols, Latin letters or acronyms goes to the verbalizer (`text.needs_verbalization`). The verbalizer is slow, and it sometimes rewrites plain words, for example "Невеличкі" into "Невеликі".
 - The verbalizer keeps a numeric date such as 15.03.2026 as digits. `text.prenormalize` writes the month as a word first.

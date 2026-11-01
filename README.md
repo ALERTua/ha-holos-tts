@@ -154,7 +154,7 @@ The file [.env.example](.env.example) explains each setting in plain words.
 | `WEB_UI` | `0` | `1` adds a web page at `/web/` on the port of the API. See "Web UI". | Set `1` to try the voices and the speed in a browser. The page has no password. |
 | *Voice and speed* | | | |
 | `DEFAULT_VOICE` | `Speaker_67` | Voice for requests without a voice, and for unknown voice names. It must be a name from `GET /v1/audio/voices`. | Change it to use another voice in the Wyoming integration, or with clients that send a name such as "alloy". |
-| `DEFAULT_SPEED` | `1.0` | Speed of the Wyoming speech, and of OpenAI requests without a speed. The range is `0.5` to `2.0`. A value outside the range stops the server. | Change it when the speech is too fast or too slow. The Wyoming protocol has no speed field. |
+| `DEFAULT_SPEED` | `1.0` | Speed of the Wyoming speech, and of OpenAI requests without a speed. The range is `0.7` to `1.3`, the same as in the HolosTTS demo. A value outside the range stops the server. | Change it when the speech is too fast or too slow. The Wyoming protocol has no speed field. |
 | `VERBALIZE` | `1` | `1` writes numbers, dates, units and acronyms as words before the speech. `0` turns the verbalizer off. `AUTO_USE_VERBALIZER` is the old name. The server reads it when `VERBALIZE` is not set. | Set `0` only when your texts have no digits or symbols. Then the server does not download the verbalizer (1.9 GB) and saves about 0.5 GB of memory. |
 | *Models and memory* | | | |
 | `DEVICE` | `cpu` | Where the speech model runs: `cpu` or `cuda`. The CPU image sets `cpu`. The CUDA image sets `cuda`. | Leave it. Choose the image tag that fits your hardware. The CPU image cannot use `cuda`. |
@@ -299,7 +299,7 @@ With the default `0`, the verbalizer stays loaded once it is loaded. With `PRELO
 |---|---|
 | `input` | The text. |
 | `voice` | A name from `GET /v1/audio/voices`. An unknown name uses the default voice. |
-| `speed` | `1.0` is the normal speed. The server accepts `0.25` to `4.0`. It raises a value below `0.5` to `0.5`, and it lowers a value above `2.0` to `2.0`. |
+| `speed` | `1.0` is the normal speed. The server accepts `0.25` to `4.0`. It raises a value below `0.7` to `0.7`, and it lowers a value above `1.3` to `1.3`. |
 | `response_format` | `mp3` (default), `wav`, `flac`, `opus` or `pcm`. `pcm` is raw 16-bit mono audio at 24 kHz. |
 | `model` | The server accepts any name. |
 
