@@ -117,7 +117,7 @@ You can add your own voices:
 
 A `.npy` file with 256 numbers also works.
 
-Version 2 of the server runs the final weights of HolosTTS. The voice vectors of these weights differ from the vectors of version 1, and the names stay the same. A voice file that you made for version 1 gives almost silence in version 2. Clone the voice again in the demo, which uses the final weights.
+Version 2 of the server runs HolosTTS updated from upstream, commit [`fdd917a`](https://huggingface.co/patriotyk/HolosTTS/commit/fdd917a47933f8b2b79b50ee1c25a239b3f9e549) of the author. The voice vectors of this model differ from the vectors of version 1, and the names stay the same. A voice file that you made for version 1 gives almost silence in version 2. Clone the voice again in the demo, which uses the same model.
 
 ## Stress marks
 
