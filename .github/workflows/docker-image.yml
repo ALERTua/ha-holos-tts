@@ -40,7 +40,7 @@ jobs:
   # paths-ignore of pull_request looks at the whole diff of the pull request, so a later push of only .md files
   # still runs everything; this job compares the push with the head before it
   changes:
-    uses: ALERTua/ci-workflows/.github/workflows/changes.yml@changes-workflow
+    uses: ALERTua/ci-workflows/.github/workflows/changes.yml@v4.2.0
     permissions:
       contents: read # checkout of the history for the diff
 
