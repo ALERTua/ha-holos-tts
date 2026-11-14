@@ -94,32 +94,95 @@ def test_read_voices_npz_refuses_a_wrong_vector_size(tmp_path):
         read_voices_npz(path)
 
 
-def test_load_voices_adds_the_extra_voices_and_skips_broken_files(tmp_path, monkeypatch, caplog):
-    model_voices = _write_npz(tmp_path / "voices.npz", ["Speaker_1", "Мій голос"], np.zeros((2, VOICE_SIZE)))
+def _fake_downloads(monkeypatch, files: dict[str, Path]) -> list[tuple[tuple, dict]]:
     downloads = []
-    monkeypatch.setattr(
-        engine, "hf_hub_download", lambda *args, **kwargs: downloads.append((args, kwargs)) or str(model_voices)
-    )
+
+    def download(*args, **kwargs) -> str:
+        downloads.append((args, kwargs))
+        return str(files[args[1]])
+
+    monkeypatch.setattr(engine, "hf_hub_download", download)
+    return downloads
+
+
+def test_load_voices_adds_the_cc0_and_extra_voices_and_skips_broken_files(tmp_path, monkeypatch, caplog):
+    model_voices = _write_npz(tmp_path / "voices.npz", ["Speaker_1", "Мій голос"], np.zeros((2, VOICE_SIZE)))
+    cc0_voices = _write_npz(tmp_path / "cc0.npz", ["Жіночий сопрано", "Speaker_1"], np.full((2, VOICE_SIZE), 2.0))
+    downloads = _fake_downloads(monkeypatch, {engine.VOICES_FILE: model_voices, engine.CC0_VOICES_FILE: cc0_voices})
     extra = tmp_path / "voices"
     extra.mkdir()
     np.save(extra / "Мій голос.npy", np.ones(VOICE_SIZE, dtype=np.float32))
+    np.save(extra / "Жіночий сопрано.npy", np.ones(VOICE_SIZE, dtype=np.float32))
     np.save(extra / "broken.npy", np.ones(3, dtype=np.float32))
     (extra / "notes.txt").write_text("not a voice", encoding="utf-8")
 
     with caplog.at_level(logging.INFO, logger=engine.LOG.name):
         voices = load_voices(extra)
 
-    assert downloads == [((engine.MODEL_REPO, engine.VOICES_FILE), {"revision": engine.MODEL_REVISION})]
-    assert sorted(voices) == ["Speaker_1", "Мій голос"]
+    assert downloads == [
+        ((engine.MODEL_REPO, engine.VOICES_FILE), {"revision": engine.MODEL_REVISION}),
+        (
+            (engine.CC0_VOICES_REPO, engine.CC0_VOICES_FILE),
+            {"revision": engine.CC0_VOICES_REVISION, "repo_type": "dataset"},
+        ),
+    ]
+    assert sorted(voices) == ["Speaker_1", "Жіночий сопрано", "Мій голос"]
+    assert voices["Speaker_1"].tolist() == [2.0] * VOICE_SIZE
+    assert voices["Жіночий сопрано"].tolist() == [1.0] * VOICE_SIZE
     assert voices["Мій голос"].tolist() == [1.0] * VOICE_SIZE
     assert "Skipping the voice file" in caplog.text
 
 
-def test_load_voices_without_the_extra_folder(tmp_path, monkeypatch):
+def test_load_voices_keeps_the_model_voices_when_the_cc0_voices_fail(tmp_path, monkeypatch, caplog):
     model_voices = _write_npz(tmp_path / "voices.npz", ["Speaker_1"], np.zeros((1, VOICE_SIZE)))
-    monkeypatch.setattr(engine, "hf_hub_download", lambda *_args, **_kwargs: str(model_voices))
+    _fake_downloads(monkeypatch, {engine.VOICES_FILE: model_voices})
 
-    assert list(load_voices(tmp_path / "missing")) == ["Speaker_1"]
+    with caplog.at_level(logging.ERROR, logger=engine.LOG.name):
+        voices = load_voices(tmp_path / "missing")
+
+    assert list(voices) == ["Speaker_1"]
+    assert "Skipping the CC0 voices" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("model_voices", "cc0_voices", "files", "names"),
+    [
+        (False, True, [engine.CC0_VOICES_FILE], ["Жіночий сопрано"]),
+        (True, False, [engine.VOICES_FILE], ["Speaker_1"]),
+    ],
+)
+def test_load_voices_skips_the_download_of_a_source_that_is_off(
+    tmp_path, monkeypatch, model_voices, cc0_voices, files, names
+):
+    downloads = _fake_downloads(
+        monkeypatch,
+        {
+            engine.VOICES_FILE: _write_npz(tmp_path / "voices.npz", ["Speaker_1"], np.zeros((1, VOICE_SIZE))),
+            engine.CC0_VOICES_FILE: _write_npz(tmp_path / "cc0.npz", ["Жіночий сопрано"], np.zeros((1, VOICE_SIZE))),
+        },
+    )
+
+    voices = load_voices(tmp_path / "missing", model_voices=model_voices, cc0_voices=cc0_voices)
+
+    assert [args[1] for args, _ in downloads] == files
+    assert list(voices) == names
+
+
+def test_load_voices_takes_only_the_user_files_when_both_sources_are_off(tmp_path, monkeypatch):
+    downloads = _fake_downloads(monkeypatch, {})
+    np.save(tmp_path / "Мій голос.npy", np.ones(VOICE_SIZE, dtype=np.float32))
+
+    voices = load_voices(tmp_path, model_voices=False, cc0_voices=False)
+
+    assert downloads == []
+    assert list(voices) == ["Мій голос"]
+
+
+def test_load_voices_refuses_an_empty_voice_list(tmp_path, monkeypatch):
+    _fake_downloads(monkeypatch, {})
+
+    with pytest.raises(ValueError, match="VOICES_PATRIOTYK and VOICES_MORKON"):
+        load_voices(tmp_path / "missing", model_voices=False, cc0_voices=True)
 
 
 def test_split_keeps_phonemes_within_the_budget_as_they_are():

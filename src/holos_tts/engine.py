@@ -38,6 +38,10 @@ MANIFEST_FORMAT = ("holos-onnx", 2)
 STAGES = ("encoder", "prosody", "decoder")
 # both bundles hold the same voices
 VOICES_FILE = "onnx-int8/voices.npz"
+# the CC0 voice dataset of Morkon; its vectors fit the model of MODEL_REVISION
+CC0_VOICES_REPO = "Morkon/holos-voices-uk-cc0"
+CC0_VOICES_FILE = "voices.npz"
+CC0_VOICES_REVISION = "53a73a51597c71d9f6cfa8dbda078632ced770d6"
 # the optimized graphs of the older single-graph model, which nothing reads now
 OLD_CACHE_FOLDER = "onnx"
 CPUINFO = Path("/proc/cpuinfo")
@@ -169,9 +173,21 @@ def read_voices_npz(path: Path) -> dict[str, np.ndarray]:
     return {name: _to_vector(value, name) for name, value in zip(names, values, strict=True)}
 
 
-def load_voices(voices_dir: Path) -> dict[str, np.ndarray]:
-    """Return the voices of the model and the extra voices from ``voices_dir``. An extra voice wins on a name clash."""
-    voices = read_voices_npz(Path(hf_hub_download(MODEL_REPO, VOICES_FILE, revision=MODEL_REVISION)))
+def load_voices(voices_dir: Path, *, model_voices: bool = True, cc0_voices: bool = True) -> dict[str, np.ndarray]:
+    """Return the voices of the model, the CC0 voices and the extra voices from ``voices_dir``. A later source wins."""
+    voices: dict[str, np.ndarray] = {}
+    if model_voices:
+        voices = read_voices_npz(Path(hf_hub_download(MODEL_REPO, VOICES_FILE, revision=MODEL_REVISION)))
+
+    if cc0_voices:
+        try:
+            cc0_path = hf_hub_download(
+                CC0_VOICES_REPO, CC0_VOICES_FILE, revision=CC0_VOICES_REVISION, repo_type="dataset"
+            )
+            voices.update(read_voices_npz(Path(cc0_path)))
+        except Exception:
+            LOG.exception("Skipping the CC0 voices of %s", CC0_VOICES_REPO)
+
     if voices_dir.is_dir():
         for file in sorted(voices_dir.iterdir()):
             if file.suffix not in (".npy", ".pt"):
@@ -183,6 +199,13 @@ def load_voices(voices_dir: Path) -> dict[str, np.ndarray]:
                 LOG.exception("Skipping the voice file %s", file)
             else:
                 LOG.info("Added the voice %r from %s", file.stem, file)
+
+    if not voices:
+        msg = (
+            f"No voices: VOICES_PATRIOTYK and VOICES_MORKON turn off or fail to load the downloaded voices, "
+            f"and {voices_dir} has no voice files"
+        )
+        raise ValueError(msg)
 
     return voices
 

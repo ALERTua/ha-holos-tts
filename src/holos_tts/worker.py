@@ -46,7 +46,11 @@ class Worker:
     def voices(self) -> dict[str, np.ndarray]:
         """Voice vectors by name."""
         if self._voices is None:
-            self._voices = load_voices(self.settings.voices_dir)
+            self._voices = load_voices(
+                self.settings.voices_dir,
+                model_voices=self.settings.voices_patriotyk,
+                cc0_voices=self.settings.voices_morkon,
+            )
 
         return self._voices
 

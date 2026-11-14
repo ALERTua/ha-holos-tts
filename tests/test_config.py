@@ -52,6 +52,8 @@ def test_defaults():
     assert settings.verbalizer_device == "cpu"
     assert settings.verbalize is True
     assert settings.web_ui is False
+    assert settings.voices_patriotyk is True
+    assert settings.voices_morkon is True
     assert settings.voices_dir == Path("/data/voices")
 
 
@@ -66,8 +68,12 @@ def test_values_from_env():
             "UNLOAD_AFTER_SECONDS": "60",
             "WEB_UI": "1",
             "DATA_DIR": "/srv/tts",
+            "VOICES_PATRIOTYK": "0",
+            "VOICES_MORKON": "off",
         }
     )
+    assert settings.voices_patriotyk is False
+    assert settings.voices_morkon is False
     assert settings.http_port == 0
     assert settings.wyoming_port == 10300
     assert settings.device == "cuda"

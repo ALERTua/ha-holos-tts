@@ -125,6 +125,13 @@ ENV \
     UV_PYTHON_DOWNLOADS=never \
     UV_NO_PROGRESS=1
 
+# The voice sources: 1 adds the voices, 0 removes them, and the server then does not download their file.
+# VOICES_PATRIOTYK: the 27 voices of the HolosTTS model. Their speakers did not agree to the synthesis.
+# VOICES_MORKON: the 29 CC0 voices of the dataset Morkon/holos-voices-uk-cc0.
+ENV \
+    VOICES_PATRIOTYK=1 \
+    VOICES_MORKON=1
+
 RUN groupadd --gid ${PGID} appuser \
     && useradd --uid ${PUID} --gid ${PGID} --no-log-init --no-create-home appuser \
     && mkdir -p /data \
