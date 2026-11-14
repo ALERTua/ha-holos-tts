@@ -48,7 +48,7 @@ The container keeps all its files in `/data`. The file docker-compose.yml mounts
 | `/data/huggingface` | The models that the server downloads from Hugging Face. The verbalizer is 1.9 GB of them. |
 | `/data/stanza` | The stress model that the server downloads. |
 | `/data/cache` | Fast copies that the server makes from the downloaded models on the first start. |
-| `/data/voices` | Your extra voices. See "Voices". |
+| `/data/voices` | Your extra voices. See "Your own voices". |
 
 The downloaded models take about 2.5 GB in `huggingface` and `stanza` together. The cache takes about 570 MB. The total is about 3.1 GB.
 
@@ -103,9 +103,23 @@ To load the models before a voice command, see `POST /v1/warmup` in the API sect
 
 ## Voices
 
-The model has 27 voices: "Гаська Шиян" and the numbered voices "Speaker_0" to "Speaker_84". `GET /v1/audio/voices` gives the list. The default voice is `Speaker_67`.
+The server takes its voices from three sources. `GET /v1/audio/voices` gives the list: the default voice first, then the named voices, then the numbered voices.
 
-The model card does not tell whose voices these are, and it gives no license for the voices. For the voices of his older model, [styletts2-ukrainian](https://huggingface.co/spaces/patriotyk/styletts2-ukrainian/discussions/11), the author wrote that they are the voices of well-known voice actors and that they should not be used. For public content, such as a video or a podcast, use your own cloned voice (see below).
+| Source | Voices | Where they come from | Switch |
+|---|---|---|---|
+| Voices of the model | 27: "Гаська Шиян" and "Speaker_0" to "Speaker_84" | `onnx-int8/voices.npz` of [HolosTTS](https://huggingface.co/patriotyk/HolosTTS) by patriotyk, commit [`fdd917a`](https://huggingface.co/patriotyk/HolosTTS/tree/fdd917a47933f8b2b79b50ee1c25a239b3f9e549/onnx-int8) | `VOICES_PATRIOTYK` |
+| CC0 voices | 29: 9 male, 14 female and 6 youth voices, for example "Чоловічий баритон · зрілий · теплий" | `voices.npz` of the dataset [holos-voices-uk-cc0](https://huggingface.co/datasets/Morkon/holos-voices-uk-cc0) by [Morkon](https://huggingface.co/Morkon), commit [`53a73a5`](https://huggingface.co/datasets/Morkon/holos-voices-uk-cc0/tree/53a73a51597c71d9f6cfa8dbda078632ced770d6) | `VOICES_MORKON` |
+| Your voices | each `.pt` or `.npy` file in `/data/voices` | you (see "Your own voices") | none |
+
+The sources have different licenses. Before you use a voice in public content, read "Voice licenses".
+
+Both switches are `1` by default. Set a switch to `0`, and the server does not download that source and does not show its voices. A voice from a later row of the table replaces a voice with the same name from an earlier row.
+
+If the server cannot download the CC0 voices, it writes the error to the log and works with the other voices. If no voice is left, for example with both switches at `0` and an empty `/data/voices`, each request fails with an error that names both switches.
+
+With `VOICES_PATRIOTYK=0`, the default voice `Speaker_67` is not in the list. Then set `DEFAULT_VOICE` to a voice from the list. Otherwise the server takes the first voice of the list and writes a warning to the log.
+
+### Your own voices
 
 You can add your own voices:
 
@@ -154,6 +168,8 @@ The file [.env.example](.env.example) explains each setting in plain words.
 | `WEB_UI` | `0` | `1` adds a web page at `/web/` on the port of the API. See "Web UI". | Set `1` to try the voices and the speed in a browser. The page has no password. |
 | *Voice and speed* | | | |
 | `DEFAULT_VOICE` | `Speaker_67` | Voice for requests without a voice, and for unknown voice names. It must be a name from `GET /v1/audio/voices`. | Change it to use another voice in the Wyoming integration, or with clients that send a name such as "alloy". |
+| `VOICES_PATRIOTYK` | `1` | `1` adds the 27 voices of the model. `0` removes them, and the server does not download their file. See "Voices". | Set `0` for public content. See "Voice licenses". Then also set `DEFAULT_VOICE`. |
+| `VOICES_MORKON` | `1` | `1` adds the 29 CC0 voices of Morkon. `0` removes them, and the server does not download their file. See "Voices". | Set `0` when you do not want these voices in the voice list of Home Assistant. |
 | `DEFAULT_SPEED` | `1.0` | Speed of the Wyoming speech, and of OpenAI requests without a speed. The range is `0.7` to `1.3`, the same as in the HolosTTS demo. A value outside the range stops the server. | Change it when the speech is too fast or too slow. The Wyoming protocol has no speed field. |
 | `VERBALIZE` | `1` | `1` writes numbers, dates, units and acronyms as words before the speech. `0` turns the verbalizer off. `AUTO_USE_VERBALIZER` is the old name. The server reads it when `VERBALIZE` is not set. | Set `0` only when your texts have no digits or symbols. Then the server does not download the verbalizer (1.9 GB) and saves about 0.5 GB of memory. |
 | *Models and memory* | | | |
@@ -376,6 +392,7 @@ Most of all, thank you to **Serhiy Stetskovych** ([patriotyk](https://github.com
 | Part | Project | Authors | License |
 |---|---|---|---|
 | Speech model | [HolosTTS](https://huggingface.co/patriotyk/HolosTTS), [demo](https://huggingface.co/spaces/patriotyk/HolosTTS), [code](https://github.com/patriotyk/HolosTTS) | Serhiy Stetskovych | MIT (model) |
+| CC0 voices | [holos-voices-uk-cc0](https://huggingface.co/datasets/Morkon/holos-voices-uk-cc0), from [Common Voice](https://commonvoice.mozilla.org/uk) recordings | Morkon; Common Voice contributors | CC0-1.0 |
 | Numbers as words | [m2m100-ukr-verbalization](https://huggingface.co/skypro1111/m2m100-ukr-verbalization) and its [CTranslate2 build](https://huggingface.co/skypro1111/m2m100-ukr-verbalization-ct2) | Serhii Kravchenko ([skypro1111](https://huggingface.co/skypro1111)) | MIT |
 | Base of the verbalizer | [M2M100 418M](https://huggingface.co/facebook/m2m100_418M) | Meta AI | MIT |
 | Training text of the verbalizer | [UberText 2.0](https://aclanthology.org/2023.unlp-1.1/) news, [verbalized](https://huggingface.co/datasets/skypro1111/ubertext-2-news-verbalized) | Dmytro Chaplynskyi; Serhii Kravchenko | CC BY 4.0 (dataset) |
@@ -389,7 +406,22 @@ Most of all, thank you to **Serhiy Stetskovych** ([patriotyk](https://github.com
 
 ## Licenses
 
-This project uses the GPL-3.0 license. The table in "Credits" gives the license of each part that the server downloads or installs. Two parts need care:
+This project uses the GPL-3.0 license. The table in "Credits" gives the license of each part that the server downloads or installs. Two parts need care: the voices and the stress model.
 
-- The voices of the model have no stated license. See "Voices".
-- The Ukrainian stanza models learned from the UD Ukrainian-IU treebank, which allows only non-commercial use (CC BY-NC-SA 4.0). Ask its authors before you use the server for a commercial product.
+### Voice licenses
+
+| Source | License | Public content |
+|---|---|---|
+| Voices of the model (`VOICES_PATRIOTYK`) | not stated, and the speakers did not agree to the synthesis | do not use |
+| CC0 voices (`VOICES_MORKON`) | CC0-1.0 (public domain) | you can use them |
+| Your voices (`/data/voices`) | the rights to the recording that you cloned | you decide |
+
+The 27 voices of the model are recordings of real people, and these people did not agree to the synthesis of their voices. The [model card](https://huggingface.co/patriotyk/HolosTTS) says that the author took the preset voices without the consent of their owners. The author confirmed this in the discussion [«Запит: джерело голосів і згода дикторів»](https://huggingface.co/patriotyk/HolosTTS/discussions/5) on Hugging Face. He also wrote that he did not keep a record of whose voices are in HolosTTS. The MIT license of the model does not state that it covers the voices. For the voices of his older model, [styletts2-ukrainian](https://huggingface.co/spaces/patriotyk/styletts2-ukrainian/discussions/11), the author wrote that they are the voices of well-known voice actors and that they should not be used.
+
+Morkon made the 29 CC0 voices with HolosTTS from recordings of [Mozilla Common Voice](https://commonvoice.mozilla.org/uk) 27.0, which has the CC0-1.0 license. The dataset gives the source recording of each voice in `SOURCES.md`, and its page has a sample of each voice.
+
+For public content, such as a video or a podcast, use a CC0 voice or your own voice, and set `VOICES_PATRIOTYK=0`.
+
+### Stress model
+
+The Ukrainian stanza models learned from the UD Ukrainian-IU treebank, which allows only non-commercial use (CC BY-NC-SA 4.0). Ask its authors before you use the server for a commercial product.

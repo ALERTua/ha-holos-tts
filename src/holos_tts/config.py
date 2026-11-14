@@ -149,6 +149,8 @@ class Settings:
     verbalizer_device: str = "cpu"
     default_voice: str = "Speaker_67"
     default_speed: float = 1.0
+    voices_patriotyk: bool = True
+    voices_morkon: bool = True
     verbalize: bool = True
     preload: bool = True
     web_ui: bool = False
@@ -184,6 +186,8 @@ class Settings:
             verbalizer_device=_choice(env, "VERBALIZER_DEVICE", default=device, choices=DEVICES),
             default_voice=env.get("DEFAULT_VOICE", defaults.default_voice).strip() or defaults.default_voice,
             default_speed=_float(env, "DEFAULT_SPEED", default=defaults.default_speed, low=MIN_SPEED, high=MAX_SPEED),
+            voices_patriotyk=_bool(env, "VOICES_PATRIOTYK", default=defaults.voices_patriotyk),
+            voices_morkon=_bool(env, "VOICES_MORKON", default=defaults.voices_morkon),
             # AUTO_USE_VERBALIZER is the name that the older styletts2 API used for the same switch
             verbalize=_bool(
                 env,

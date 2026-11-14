@@ -42,6 +42,16 @@ def test_verbalizer_loads_only_for_text_with_numbers(fake_worker):
     assert FakeVerbalizer.calls == ["Зустріч о 7."]
 
 
+def test_voices_follow_the_source_switches(monkeypatch):
+    calls = []
+    monkeypatch.setattr(worker, "load_voices", lambda folder, **switches: calls.append((folder, switches)) or {})
+    settings = make_settings(voices_patriotyk=False, voices_morkon=True)
+
+    _ = worker.Worker(settings).voices
+
+    assert calls == [(settings.voices_dir, {"model_voices": False, "cc0_voices": True})]
+
+
 def test_unknown_voice_is_an_error(fake_worker):
     with pytest.raises(KeyError, match="alloy"):
         fake_worker.synthesize(["Так."], "alloy", 1.0)
