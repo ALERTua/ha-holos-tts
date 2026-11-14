@@ -20,3 +20,4 @@ data/
 .claude/*
 !.claude/skills/
 !.claude/memory/
+/plans/
