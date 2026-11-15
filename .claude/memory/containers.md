@@ -15,4 +15,5 @@ metadata:
 - Inside the container, the servers keep the ports 8000 and 10200. `docker-compose.yml` and the justfile map `HTTP_PORT` and `WYOMING_PORT` to the host.
 - The justfile runs the containers with wslc, the container command of WSL. wslc has no compose. A `-e` value overrides the same variable from `--env-file`.
 - The justfile mounts the folder `data` next to it as `/data`. A model load from a Windows folder is about 1.7 times slower than from a named volume. This does not apply to a Linux host.
+- Windows cannot read `data/huggingface` that the Linux container wrote: `hf_hub_download` fails with `WinError 1920` on its symlinks. To run the real models on Windows through `uv run`, set `HF_HOME` and `STANZA_RESOURCES_DIR` to a folder outside `data`, and give `Settings(data_dir=...)` the same folder. The first run downloads the models again, about 770 MB without the verbalizer.
 - In Git Bash, set `MSYS_NO_PATHCONV=1` for each wslc command with a container path, or Git Bash changes `/data` into a Windows path.
