@@ -75,8 +75,18 @@ def synthesize(text, speed):
     if "LOUD" in text:
         return ("ok", np.tile(np.array([2.0, 1.0], dtype=np.float32), 4))
 
+    if "SPEECH" in text:
+        return ("ok", speech_like(0.05))
+
     # one sample per character, so a test can see which chunk came back
     return ("ok", np.full(len(text), speed / 10, dtype=np.float32))
+
+
+def speech_like(amplitude, seconds=2.0, rate=24000):
+    """Return a quiet tone of 220 Hz with an envelope of four syllables per second, as a stand-in for speech."""
+    t = np.arange(int(seconds * rate)) / rate
+    envelope = np.abs(np.sin(np.pi * 4 * t))
+    return (amplitude * envelope * np.sin(2 * np.pi * 220 * t)).astype(np.float32)
 
 
 def verbalize(sentences):

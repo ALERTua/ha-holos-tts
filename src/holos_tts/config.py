@@ -20,6 +20,9 @@ DEVICES = ("cpu", "cuda")
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 LOG_LEVEL_ALIASES = {"WARN": "WARNING", "FATAL": "CRITICAL"}
 CGROUP_CPU_MAX = Path("/sys/fs/cgroup/cpu.max")
+# the range of TARGET_LOUDNESS in LUFS; 0 is outside it and turns the step off
+LOUDNESS_LOW = -30.0
+LOUDNESS_HIGH = -10.0
 # None on Windows and macOS, which have no os.sched_getaffinity
 SCHED_GETAFFINITY: Callable[[int], set[int]] | None = getattr(os, "sched_getaffinity", None)
 
@@ -78,6 +81,16 @@ def _float(env: Mapping[str, str], name: str, *, default: float, low: float, hig
         raise SettingsError(msg)
 
     return number
+
+
+def _target_loudness(env: Mapping[str, str], name: str, *, default: float) -> float:
+    """Read a loudness target in LUFS from LOUDNESS_LOW to LOUDNESS_HIGH, or 0 that turns the step off."""
+    value = _float(env, name, default=default, low=LOUDNESS_LOW, high=0.0)
+    if LOUDNESS_HIGH < value < 0:
+        msg = f"{name}={env.get(name)!r} is outside the range {LOUDNESS_LOW}..{LOUDNESS_HIGH}. Use 0 to turn it off."
+        raise SettingsError(msg)
+
+    return value
 
 
 def _cpu_limit_threads() -> int:
@@ -149,6 +162,7 @@ class Settings:
     verbalizer_device: str = "cpu"
     default_voice: str = "Speaker_67"
     default_speed: float = 1.0
+    target_loudness: float = -16.0
     voices_patriotyk: bool = True
     voices_morkon: bool = True
     verbalize: bool = True
@@ -186,6 +200,7 @@ class Settings:
             verbalizer_device=_choice(env, "VERBALIZER_DEVICE", default=device, choices=DEVICES),
             default_voice=env.get("DEFAULT_VOICE", defaults.default_voice).strip() or defaults.default_voice,
             default_speed=_float(env, "DEFAULT_SPEED", default=defaults.default_speed, low=MIN_SPEED, high=MAX_SPEED),
+            target_loudness=_target_loudness(env, "TARGET_LOUDNESS", default=defaults.target_loudness),
             voices_patriotyk=_bool(env, "VOICES_PATRIOTYK", default=defaults.voices_patriotyk),
             voices_morkon=_bool(env, "VOICES_MORKON", default=defaults.voices_morkon),
             # AUTO_USE_VERBALIZER is the name that the older styletts2 API used for the same switch

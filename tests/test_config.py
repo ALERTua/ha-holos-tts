@@ -55,6 +55,26 @@ def test_defaults():
     assert settings.voices_patriotyk is True
     assert settings.voices_morkon is True
     assert settings.voices_dir == Path("/data/voices")
+    assert settings.target_loudness == pytest.approx(-16.0)
+
+
+@pytest.mark.parametrize(
+    ("raw", "target"),
+    [("-14", -14.0), ("-30", -30.0), ("-10", -10.0), ("0", 0.0), ("", -16.0)],
+)
+def test_target_loudness_from_env(raw, target):
+    assert Settings.from_env({"TARGET_LOUDNESS": raw}).target_loudness == pytest.approx(target)
+
+
+@pytest.mark.parametrize("raw", ["-31", "-9", "-0.5", "5", "loud"])
+def test_target_loudness_outside_the_range_is_refused_with_the_off_value(raw):
+    with pytest.raises(SettingsError, match="TARGET_LOUDNESS"):
+        Settings.from_env({"TARGET_LOUDNESS": raw})
+
+
+def test_target_loudness_error_names_the_off_value():
+    with pytest.raises(SettingsError, match="Use 0 to turn it off"):
+        Settings.from_env({"TARGET_LOUDNESS": "-5"})
 
 
 def test_values_from_env():

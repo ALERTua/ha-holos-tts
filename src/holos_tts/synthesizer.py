@@ -15,7 +15,8 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from . import worker_entry
-from .constants import MODEL_PARTS
+from .audio import normalize
+from .constants import MODEL_PARTS, SAMPLE_RATE
 from .text import group_sentences, prepare_sentences
 
 if TYPE_CHECKING:
@@ -164,7 +165,8 @@ class Synthesizer:
         for chunk in chunks:
             # the lock covers one chunk, so a client that reads its audio slowly does not stop other requests
             audio = await self._request("synth", chunk, resolved, speed)
-            yield audio
+            # each chunk alone, so the Wyoming stream and the whole-file answers get the same audio
+            yield await asyncio.to_thread(normalize, audio, SAMPLE_RATE, self.settings.target_loudness)
 
     async def verbalize(self, text: str) -> str:
         """Return ``text`` with numbers, dates, units and acronyms written as words."""
