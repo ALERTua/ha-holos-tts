@@ -20,9 +20,9 @@ DEVICES = ("cpu", "cuda")
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 LOG_LEVEL_ALIASES = {"WARN": "WARNING", "FATAL": "CRITICAL"}
 CGROUP_CPU_MAX = Path("/sys/fs/cgroup/cpu.max")
-# the range of TARGET_LOUDNESS in LUFS; 0 is outside it and turns the step off
+# the range of TARGET_LOUDNESS in LUFS; above -14 the limiter cannot reach the target, 0 turns the step off
 LOUDNESS_LOW = -30.0
-LOUDNESS_HIGH = -10.0
+LOUDNESS_HIGH = -14.0
 # None on Windows and macOS, which have no os.sched_getaffinity
 SCHED_GETAFFINITY: Callable[[int], set[int]] | None = getattr(os, "sched_getaffinity", None)
 
@@ -85,9 +85,19 @@ def _float(env: Mapping[str, str], name: str, *, default: float, low: float, hig
 
 def _target_loudness(env: Mapping[str, str], name: str, *, default: float) -> float:
     """Read a loudness target in LUFS from LOUDNESS_LOW to LOUDNESS_HIGH, or 0 that turns the step off."""
-    value = _float(env, name, default=default, low=LOUDNESS_LOW, high=0.0)
-    if LOUDNESS_HIGH < value < 0:
-        msg = f"{name}={env.get(name)!r} is outside the range {LOUDNESS_LOW}..{LOUDNESS_HIGH}. Use 0 to turn it off."
+    raw = env.get(name)
+    if raw is None or not raw.strip():
+        return default
+
+    try:
+        value = float(raw.strip())
+    except ValueError as e:
+        msg = f"{name}={raw!r} is not a number."
+        raise SettingsError(msg) from e
+
+    # a NaN fails both comparisons, so it gets the same error as a value out of range
+    if value != 0 and not LOUDNESS_LOW <= value <= LOUDNESS_HIGH:
+        msg = f"{name}={raw!r} is outside the range {LOUDNESS_LOW}..{LOUDNESS_HIGH}. Use 0 to turn it off."
         raise SettingsError(msg)
 
     return value

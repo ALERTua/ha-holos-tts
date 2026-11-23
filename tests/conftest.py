@@ -10,7 +10,7 @@ from tests import fake_worker
 
 
 def make_settings(**overrides):
-    # the fake worker returns marker samples, not speech, so the tests keep them as they are unless a test asks
+    # marker samples must reach the tests unchanged
     overrides.setdefault("target_loudness", 0.0)
     return dataclasses.replace(Settings(), **overrides)
 

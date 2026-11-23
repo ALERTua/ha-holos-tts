@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
+from holos_tts import audio as audio_module
 from holos_tts.audio import (
     LIMIT_CEILING_DB,
     MAX_GAIN_DB,
@@ -93,6 +94,22 @@ def test_normalize_makes_up_the_loss_of_the_limiter():
     one_pass = limit(audio * 10 ** ((-8.0 - loudness(audio, RATE)) / 20), RATE)
     two_passes = loudness(normalize(audio, RATE, -8.0), RATE)
     assert loudness(one_pass, RATE) + 0.1 < two_passes < -8.0
+
+
+@pytest.mark.parametrize("spike", [4.0, 1e6])
+def test_normalize_keeps_each_sample_at_or_below_the_ceiling_when_the_limiter_works(spike):
+    audio = speech_like(0.2)
+    audio[RATE // 3] = spike
+    result = normalize(audio, RATE, -10.0)
+    assert np.max(np.abs(result)) <= CEILING
+
+
+def test_second_gain_pass_also_stops_at_the_largest_gain(monkeypatch):
+    # the first pass needs 12.8 dB and the limiter loss asks for about 0.3 dB more, above a cap of 13 dB
+    audio = speech_like(0.2)
+    monkeypatch.setattr(audio_module, "MAX_GAIN_DB", 13.0)
+    capped = limit(audio * 10 ** (13.0 / 20), RATE)
+    assert np.array_equal(normalize(audio, RATE, -8.0), capped)
 
 
 def test_normalize_raises_a_very_quiet_chunk_by_the_largest_gain_only():

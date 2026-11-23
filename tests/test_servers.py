@@ -28,6 +28,7 @@ from wyoming.tts import (
     SynthesizeVoice,
 )
 
+from holos_tts.audio import loudness
 from holos_tts.constants import MAX_SPEED, MIN_SPEED
 from holos_tts.openai_api import create_app
 from holos_tts.synthesizer import Synthesizer
@@ -291,6 +292,17 @@ async def test_speech_without_speed_uses_the_default_speed_of_the_settings():
         response = await client.post("/v1/audio/speech", json={"input": "Так.", "response_format": "pcm"})
 
     assert first_pcm_sample(response) == pytest.approx(0.12 * 32767, abs=1)
+
+
+async def test_speech_wav_comes_at_the_target_loudness_of_the_settings():
+    synth = Synthesizer(
+        make_settings(preload=False, target_loudness=-18.0), chunk_chars=20, worker_target=fake_worker.run
+    )
+    async with http_client_of(synth) as client:
+        response = await client.post("/v1/audio/speech", json={"input": "Голос SPEECH.", "response_format": "wav"})
+
+    audio, rate = sf.read(io.BytesIO(response.content), dtype="float32")
+    assert loudness(audio, rate) == pytest.approx(-18.0, abs=0.3)
 
 
 async def test_voices_of_a_worker_that_cannot_list_them_are_unavailable():

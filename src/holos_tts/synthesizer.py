@@ -165,7 +165,7 @@ class Synthesizer:
         for chunk in chunks:
             # the lock covers one chunk, so a client that reads its audio slowly does not stop other requests
             audio = await self._request("synth", chunk, resolved, speed)
-            # each chunk alone, so the Wyoming stream and the whole-file answers get the same audio
+            # per chunk, so streamed and whole-file answers match
             yield await asyncio.to_thread(normalize, audio, SAMPLE_RATE, self.settings.target_loudness)
 
     async def verbalize(self, text: str) -> str:

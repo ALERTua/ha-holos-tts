@@ -6,7 +6,7 @@ import time
 
 import numpy as np
 
-from holos_tts.constants import MODEL_PARTS
+from holos_tts.constants import MODEL_PARTS, SAMPLE_RATE
 
 VOICES = ["Гаська Шиян", "Speaker_0"]
 # a "SLOW" request must outlast two pauses of a test, so a test can cancel it twice while the worker still runs it
@@ -82,9 +82,9 @@ def synthesize(text, speed):
     return ("ok", np.full(len(text), speed / 10, dtype=np.float32))
 
 
-def speech_like(amplitude, seconds=2.0, rate=24000):
-    """Return a quiet tone of 220 Hz with an envelope of four syllables per second, as a stand-in for speech."""
-    t = np.arange(int(seconds * rate)) / rate
+def speech_like(amplitude, seconds=2.0):
+    """Return a tone of 220 Hz with an envelope of four syllables per second, as a stand-in for speech."""
+    t = np.arange(int(seconds * SAMPLE_RATE)) / SAMPLE_RATE
     envelope = np.abs(np.sin(np.pi * 4 * t))
     return (amplitude * envelope * np.sin(2 * np.pi * 220 * t)).astype(np.float32)
 

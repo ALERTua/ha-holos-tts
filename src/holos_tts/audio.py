@@ -24,21 +24,21 @@ STEP_SECONDS = 0.1
 ABSOLUTE_GATE_LUFS = -70.0
 RELATIVE_GATE_LU = -10.0
 LOUDNESS_OFFSET = -0.691
-# the K-weighting filters of BS.1770 as analog prototypes, so that any sample rate gets its coefficients
+# BS.1770 K-weighting as analog prototypes, valid for any sample rate
 SHELF_HZ = 1681.974450955533
 SHELF_GAIN_DB = 3.999843853973347
 SHELF_Q = 0.7071752369554196
 SHELF_VB_POWER = 0.4996667741545416
 HIGH_PASS_HZ = 38.13547087602444
 HIGH_PASS_Q = 0.5003270373238773
-# the impulse response of the K-weighting has decayed after this time, so the FFT filter does not wrap around
+# zero padding long enough that the FFT filter does not wrap its tail
 FILTER_TAIL_SECONDS = 0.5
-# a sample ceiling of -2 dBFS keeps the true peak at or below -1 dBFS, also after an MP3 encode
+# with targets up to -14 LUFS, this sample ceiling keeps the true peak at or below -1 dBFS, also in MP3
 LIMIT_CEILING_DB = -2.0
 LIMIT_HALF_WINDOW_SECONDS = 0.005
-# a quiet chunk, for example a breath, must not become loud noise
+# a breath must not become loud noise
 MAX_GAIN_DB = 24.0
-# the limiter takes some loudness off; a second pass makes up a loss above this value
+# a limiter loss above this gets one more gain pass
 CORRECTION_LU = 0.2
 
 
@@ -63,7 +63,7 @@ def _k_weighting(size: int, rate: int) -> np.ndarray:
     """Return the K-weighting response of BS.1770 for the bins of ``numpy.fft.rfft`` of ``size`` samples."""
     z = np.exp(2j * np.pi * np.fft.rfftfreq(size))
     k = np.tan(np.pi * SHELF_HZ / rate)
-    vh = 10 ** (SHELF_GAIN_DB / 20)
+    vh = _db_to_gain(SHELF_GAIN_DB)
     vb = vh**SHELF_VB_POWER
     a0 = 1 + k / SHELF_Q + k * k
     shelf = _biquad_response(
@@ -78,7 +78,10 @@ def _k_weighting(size: int, rate: int) -> np.ndarray:
         (1.0, 2 * (k * k - 1) / a0, (1 - k / HIGH_PASS_Q + k * k) / a0),
         z,
     )
-    return shelf * high_pass
+    response = shelf * high_pass
+    # the cache shares this array between all calls
+    response.setflags(write=False)
+    return response
 
 
 def _block_powers(weighted: np.ndarray, rate: int) -> np.ndarray:
@@ -137,18 +140,19 @@ def _running_mean(values: np.ndarray, half: int) -> np.ndarray:
 
 
 def limit(audio: np.ndarray, rate: int, ceiling_db: float = LIMIT_CEILING_DB) -> np.ndarray:
-    """Lower the peaks above the ceiling with a smooth gain. Audio below the ceiling stays the same."""
+    """Lower the peaks above the ceiling with a smooth gain. Audio with no sample above it comes back unchanged."""
     ceiling = _db_to_gain(ceiling_db)
-    # float64, because a running sum of float32 values drifts by more than the margin of the ceiling
+    # float64: a float32 running sum drifts past the ceiling
     peaks = np.abs(audio.astype(np.float64))
     if audio.size == 0 or float(peaks.max()) <= ceiling:
         return audio
 
     needed = np.minimum(1.0, ceiling / np.maximum(peaks, ceiling))
     half = max(1, round(LIMIT_HALF_WINDOW_SECONDS * rate))
-    # each mean covers windows that all hold the sample, so the gain is never above the gain that the sample needs
+    # every window of the mean holds the sample, so the gain never exceeds its need
     gain = _running_mean(_running_min(needed, half), half)
-    return (audio * gain).astype(np.float32)
+    # the clip only removes the rounding of the running sum
+    return np.clip(audio * gain, -ceiling, ceiling).astype(np.float32)
 
 
 def normalize(audio: np.ndarray, rate: int, target_lufs: float) -> np.ndarray:
@@ -163,7 +167,7 @@ def normalize(audio: np.ndarray, rate: int, target_lufs: float) -> np.ndarray:
     gain_db = min(target_lufs - level, MAX_GAIN_DB)
     result = limit(audio * _db_to_gain(gain_db), rate)
     after = loudness(result, rate)
-    if after is not None and target_lufs - after > CORRECTION_LU and gain_db < MAX_GAIN_DB:
+    if after is not None and target_lufs - after > CORRECTION_LU:
         gain_db = min(gain_db + target_lufs - after, MAX_GAIN_DB)
         result = limit(audio * _db_to_gain(gain_db), rate)
 

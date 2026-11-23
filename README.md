@@ -143,7 +143,9 @@ The server splits a sentence longer than 150 characters at commas, then at space
 
 ## Loudness
 
-The HolosTTS model speaks at about −25 LUFS, which is about 9 LU quieter than the old StyleTTS2 server. The server therefore brings each piece of speech to the loudness of `TARGET_LOUDNESS`, −16 LUFS by default, with the meter of ITU-R BS.1770-4. A peak limiter keeps each sample at or below −2 dBFS, so the true peak stays at or below about −1 dBFS, also after an MP3 encode. All voices get the same loudness.
+The HolosTTS model speaks at about −25 LUFS, which is about 9 LU quieter than the old StyleTTS2 server. The server therefore brings each piece of speech to the loudness of `TARGET_LOUDNESS`, −16 LUFS by default, with the meter of ITU-R BS.1770-4. A peak limiter keeps each sample at or below −2 dBFS. On the measured voices, the true peak stayed at or below −1.3 dBFS, also after an MP3 encode, and the voices came out within 0.3 LU of −16 LUFS.
+
+The highest target is −14 LUFS. The peaks of the model are about 19 dB above its loudness, so a louder target makes the limiter take off so much that the target is not reached and the true peak gets near 0 dBFS. At −14 LUFS, some voices come out up to about 1 LU quieter than the target.
 
 Set `TARGET_LOUDNESS=0` to get the level of the model, as in the versions before this setting.
 
@@ -177,7 +179,7 @@ The file [.env.example](.env.example) explains each setting in plain words.
 | `VOICES_PATRIOTYK` | `1` | `1` adds the 27 voices of the model. `0` removes them, and the server does not download their file. See "Voices". | Set `0` for public content. See "Voice licenses". Then also set `DEFAULT_VOICE`. |
 | `VOICES_MORKON` | `1` | `1` adds the 29 CC0 voices of Morkon. `0` removes them, and the server does not download their file. See "Voices". | Set `0` when you do not want these voices in the voice list of Home Assistant. |
 | `DEFAULT_SPEED` | `1.0` | Speed of the Wyoming speech, and of OpenAI requests without a speed. The range is `0.7` to `1.3`, the same as in the HolosTTS demo. A value outside the range stops the server. | Change it when the speech is too fast or too slow. The Wyoming protocol has no speed field. |
-| `TARGET_LOUDNESS` | `-16` | Loudness of the speech in LUFS, from `-30` to `-10`. `0` keeps the level of the model, about −25 LUFS. A value outside the range stops the server. See "Loudness". | Raise it, for example to `-14`, when the speech is quieter than other sounds of your speakers. Lower it when it is louder. |
+| `TARGET_LOUDNESS` | `-16` | Loudness of the speech in LUFS, from `-30` to `-14`. `0` keeps the level of the model, about −25 LUFS. A value outside the range stops the server. See "Loudness". | Raise it, at most to `-14`, when the speech is quieter than other sounds of your speakers. Lower it when it is louder. |
 | `VERBALIZE` | `1` | `1` writes numbers, dates, units and acronyms as words before the speech. `0` turns the verbalizer off. `AUTO_USE_VERBALIZER` is the old name. The server reads it when `VERBALIZE` is not set. | Set `0` only when your texts have no digits or symbols. Then the server does not download the verbalizer (1.9 GB) and saves about 0.5 GB of memory. |
 | *Models and memory* | | | |
 | `DEVICE` | `cpu` | Where the speech model runs: `cpu` or `cuda`. The CPU image sets `cpu`. The CUDA image sets `cuda`. | Leave it. Choose the image tag that fits your hardware. The CPU image cannot use `cuda`. |
