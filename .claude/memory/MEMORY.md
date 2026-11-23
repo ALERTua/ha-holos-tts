@@ -8,6 +8,7 @@ Read this index from the top. A line with no link is the full rule.
 - Fix a type error instead of a `# ty: ignore` comment. An ignore that stays must give its reason on the same line.
 - After a change of the engine, the verbalizer or the text pipeline, transcribe the speech with an STT model and compare the words. A waveform comparison does not show broken speech. The STT model drops most numbers, so judge the result by the words.
 - [Models and pins](models.md) — before you change a model, a model revision, the verbalizer, the stress model or the text pipeline, read this file.
+- [Loudness](loudness.md) — before you change the level of the audio, the loudness meter, the limiter, `TARGET_LOUDNESS` or a path that gives audio to gradio, read this file.
 - [Voices](voices.md) — before you change a voice source, a voice pin, the voice switches, the voice list or the voice text of the README, read this file.
 - [Worker process](worker.md) — before you change the worker process, the lock, the warm-up, the idle unload or a cancel path, read this file.
 - [Caches](caches.md) — before you change a file under `/data/cache` or the code that writes it, read this file.

@@ -4,9 +4,12 @@ import gc
 import logging
 import random
 
+import numpy as np
 import pytest
 
 from holos_tts import synthesizer as synthesizer_module
+from holos_tts.audio import loudness
+from holos_tts.constants import SAMPLE_RATE
 from holos_tts.synthesizer import SynthesisError, Synthesizer
 from tests import fake_worker
 from tests.conftest import make_settings
@@ -115,6 +118,26 @@ async def test_synthesize_yields_one_array_per_chunk(synthesizer):
         len("Третє."),
     ]
     assert chunks[0][0] == pytest.approx(0.15)
+
+
+@pytest.mark.parametrize("target", [-16.0, -20.0])
+async def test_each_chunk_comes_out_at_the_target_loudness(target):
+    synth = Synthesizer(
+        make_settings(preload=False, target_loudness=target), chunk_chars=10, worker_target=fake_worker.run
+    )
+    try:
+        chunks = await collect(synth, "Перше SPEECH. Друге SPEECH.")
+    finally:
+        await synth.stop()
+
+    assert len(chunks) == 2
+    for chunk in chunks:
+        assert loudness(chunk, SAMPLE_RATE) == pytest.approx(target, abs=0.3)
+
+
+async def test_target_loudness_zero_keeps_the_audio_of_the_worker(synthesizer):
+    (chunk,) = await collect(synthesizer, "Тихо SPEECH.")
+    assert np.array_equal(chunk, fake_worker.speech_like(0.05))
 
 
 async def test_worker_error_becomes_a_synthesis_error(synthesizer):

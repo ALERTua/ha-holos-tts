@@ -55,6 +55,29 @@ def test_defaults():
     assert settings.voices_patriotyk is True
     assert settings.voices_morkon is True
     assert settings.voices_dir == Path("/data/voices")
+    assert settings.target_loudness == pytest.approx(-16.0)
+
+
+@pytest.mark.parametrize(
+    ("raw", "target"),
+    [("-14", -14.0), ("-14.1", -14.1), ("-30", -30.0), ("-29.9", -29.9), ("0", 0.0), ("", -16.0)],
+)
+def test_target_loudness_from_env(raw, target):
+    assert Settings.from_env({"TARGET_LOUDNESS": raw}).target_loudness == pytest.approx(target)
+
+
+# above -14 LUFS the limiter cannot reach the target, and the true peak passes -1 dBFS
+@pytest.mark.parametrize("raw", ["-31", "-30.1", "-13.9", "-10", "-0.5", "5", "nan", "inf"])
+def test_target_loudness_outside_the_range_is_refused_with_the_range_and_the_off_value(raw):
+    with pytest.raises(
+        SettingsError, match=r"TARGET_LOUDNESS=.* is outside the range -30\.0\.\.-14\.0\. Use 0 to turn"
+    ):
+        Settings.from_env({"TARGET_LOUDNESS": raw})
+
+
+def test_target_loudness_that_is_no_number_is_refused():
+    with pytest.raises(SettingsError, match="TARGET_LOUDNESS='loud' is not a number"):
+        Settings.from_env({"TARGET_LOUDNESS": "loud"})
 
 
 def test_values_from_env():
